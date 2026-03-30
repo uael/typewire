@@ -56,7 +56,7 @@ trybuild = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 indexmap = "2"
-typewire = { path = ".", features = ["base64", "serde_json", "indexmap"] }
+typewire = { version = "=0.0.1", path = ".", features = ["base64", "serde_json", "indexmap"] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen = "0.2"
