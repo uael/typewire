@@ -43,6 +43,8 @@
 !examples/*/
 !examples/*/Cargo.toml
 !examples/*/README.md
+!examples/*/*.mjs
+!examples/*/*.d.ts
 !examples/*/src/
 !examples/**/*.rs
 

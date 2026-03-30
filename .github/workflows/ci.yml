@@ -39,10 +39,18 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
+      - uses: cargo-bins/cargo-binstall@main
+      - run: cargo binstall --no-confirm wasm-bindgen-cli
       - uses: Swatinem/rust-cache@v2
       - run: cargo build -p todo-app --target wasm32-unknown-unknown --release
-      - run: cargo run -p typewire --features cli -- target/wasm32-unknown-unknown/release/todo_app.wasm -o examples/todo-app/types.gen.d.ts
-      - run: diff examples/todo-app/types.d.ts examples/todo-app/types.gen.d.ts
+      - name: TypeScript snapshot
+        run: |
+          cargo run -p typewire --features cli -- target/wasm32-unknown-unknown/release/todo_app.wasm --no-strip -o examples/todo-app/types.gen.d.ts
+          diff examples/todo-app/types.d.ts examples/todo-app/types.gen.d.ts
+      - name: JS runtime test
+        run: |
+          wasm-bindgen target/wasm32-unknown-unknown/release/todo_app.wasm --out-dir examples/todo-app/pkg --target nodejs --no-typescript
+          node examples/todo-app/test.mjs
 
   lint:
     name: Lint
