@@ -38,6 +38,14 @@
 !typewire-schema/tests/
 !typewire-schema/**/*.rs
 
+# Rust (examples)
+!examples/
+!examples/*/
+!examples/*/Cargo.toml
+!examples/*/README.md
+!examples/*/src/
+!examples/**/*.rs
+
 # Rust (xtask)
 !xtask/
 !xtask/Cargo.toml

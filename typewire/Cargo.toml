@@ -28,6 +28,7 @@ name = "typewire"
 path = "src/bin.rs"
 required-features = ["cli"]
 
+
 [dependencies]
 typewire-derive = { version = "=0.0.1", path = "../typewire-derive", optional = true }
 typewire-schema = { version = "=0.0.1", path = "../typewire-schema" }

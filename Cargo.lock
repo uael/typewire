@@ -937,6 +937,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "todo-app"
+version = "0.0.0"
+dependencies = [
+ "js-sys",
+ "typewire",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "toml"
 version = "1.1.0+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

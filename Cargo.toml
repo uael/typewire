@@ -1,5 +1,5 @@
 [workspace]
-members = ["typewire", "typewire-derive", "typewire-schema", "xtask"]
+members = ["typewire", "typewire-derive", "typewire-schema", "xtask", "examples/*"]
 resolver = "3"
 
 [workspace.package]

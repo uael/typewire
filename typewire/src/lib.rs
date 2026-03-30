@@ -553,6 +553,7 @@ pub fn patch_js_slice<'a, T: Typewire + 'a>(
   old: &wasm_bindgen::JsValue,
   set: impl FnOnce(wasm_bindgen::JsValue),
 ) {
+  #[cfg(debug_assertions)]
   let old_old = old.clone();
   if !patch_js_slice_inner(new.clone(), old, set) {
     return;
