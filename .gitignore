@@ -1,0 +1,47 @@
+# Ignore everything
+*
+
+# Git
+!.git
+!.git/**
+!.gitignore
+
+# Project
+!README.md
+!CHANGELOG.md
+!LICENSE-*
+!deny.toml
+!release-plz.toml
+!.github/
+!.github/workflows/
+!.github/**/*.yml
+
+# Rust
+!Cargo.toml
+!Cargo.lock
+!rust-toolchain
+!rustfmt.toml
+!.cargo/
+!.cargo/config.toml
+!typewire/
+!typewire/src/
+!typewire/**/*.rs
+!typewire-derive/
+!typewire-derive/src/
+!typewire-derive/**/*.rs
+!typewire-schema/
+!typewire-schema/src/
+!typewire-schema/**/*.rs
+
+# Rust (xtask)
+!xtask/
+!xtask/Cargo.toml
+!xtask/src/
+!xtask/**/*.rs
+
+# Claude
+!CLAUDE.md
+!.claude/
+!.claude/settings.json
+!.claude/commands/
+!.claude/**/*.md

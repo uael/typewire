@@ -1,0 +1,22 @@
+[package]
+name = "typewire"
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+license = "Apache-2.0 OR MIT"
+description = "TODO"
+repository = "https://github.com/uael/typewire"
+homepage = "https://github.com/uael/typewire"
+documentation = "https://docs.rs/typewire"
+readme = "../README.md"
+
+[dependencies]
+typewire-derive = { version = "=0.0.1", path = "../typewire-derive" }
+typewire-schema = { version = "=0.0.1", path = "../typewire-schema" }
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true
