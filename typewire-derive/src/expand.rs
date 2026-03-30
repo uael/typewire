@@ -85,6 +85,7 @@ pub fn expand<C: Codegen>(input: &DeriveInput) -> TokenStream {
 
 fn analyze(input: &DeriveInput) -> Result<Schema, TokenStream> {
   let container = ContainerAttrs::from_attrs(&input.attrs);
+  container.validate(input.ident.span()).map_err(|e| e.to_compile_error())?;
 
   // Handle #[serde(from/try_from/into)] delegation.
   // When both from/try_from AND into are present, use into for to_js

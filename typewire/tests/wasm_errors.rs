@@ -13,13 +13,14 @@ use wasm_bindgen_test::*;
 #[wasm_bindgen_test]
 fn test_error_context() {
   // Missing nested field — error message includes type and field path.
+  // Format: in `ContextOuter`: in `inner`: in `ContextInner`: missing field `port`
   let js = eval("({ name: 'test', inner: {} })");
   let err = ContextOuter::from_js(js).unwrap_err();
   let msg = err.to_string();
-  assert!(msg.contains("ContextOuter"), "should mention outer type: {msg}");
-  assert!(msg.contains("inner"), "should mention field name: {msg}");
-  assert!(msg.contains("ContextInner"), "should mention inner type: {msg}");
-  assert!(msg.contains("port"), "should mention missing field: {msg}");
+  assert!(msg.contains("`ContextOuter`"), "should mention outer type: {msg}");
+  assert!(msg.contains("`inner`"), "should mention field name: {msg}");
+  assert!(msg.contains("`ContextInner`"), "should mention inner type: {msg}");
+  assert!(msg.contains("`port`"), "should mention missing field: {msg}");
 }
 
 #[wasm_bindgen_test]
@@ -27,12 +28,12 @@ fn test_error_context_deep_nesting() {
   let js = eval("({ middle: { inner: {} } })");
   let err = DeepErrorOuter::from_js(js).unwrap_err();
   let msg = err.to_string();
-  assert!(msg.contains("DeepErrorOuter"), "should mention outermost: {msg}");
-  assert!(msg.contains("middle"), "should mention middle field: {msg}");
-  assert!(msg.contains("DeepErrorMiddle"), "should mention middle type: {msg}");
-  assert!(msg.contains("inner"), "should mention inner field: {msg}");
-  assert!(msg.contains("ContextInner"), "should mention innermost type: {msg}");
-  assert!(msg.contains("port"), "should mention missing leaf field: {msg}");
+  assert!(msg.contains("`DeepErrorOuter`"), "should mention outermost: {msg}");
+  assert!(msg.contains("`middle`"), "should mention middle field: {msg}");
+  assert!(msg.contains("`DeepErrorMiddle`"), "should mention middle type: {msg}");
+  assert!(msg.contains("`inner`"), "should mention inner field: {msg}");
+  assert!(msg.contains("`ContextInner`"), "should mention innermost type: {msg}");
+  assert!(msg.contains("`port`"), "should mention missing leaf field: {msg}");
 }
 
 // ===========================================================================

@@ -1,0 +1,5 @@
+error: cannot combine `from` and `try_from` — use one or the other
+ --> tests/compile_fail/from_and_try_from.rs:5:8
+  |
+5 | struct Bad(String);
+  |        ^^^

@@ -564,6 +564,7 @@ impl<T: Typewire> Typewire for Option<T> {
   }
 }
 
+/// Converts an iterator of `&T` references to a JS array via `Typewire::to_js`.
 #[cfg(target_arch = "wasm32")]
 pub fn array_ref<'a, T: Typewire + 'a>(
   iter: impl IntoIterator<Item = &'a T>,
@@ -571,6 +572,9 @@ pub fn array_ref<'a, T: Typewire + 'a>(
   array(iter.into_iter().map(Typewire::to_js))
 }
 
+/// Converts an iterator of owned `JsValue`s into a JS array.
+///
+/// Pre-allocates if the iterator reports an exact size.
 #[cfg(target_arch = "wasm32")]
 pub fn array<T: Typewire>(iter: impl IntoIterator<Item = T>) -> wasm_bindgen::JsValue {
   let iter = iter.into_iter();
@@ -601,7 +605,10 @@ impl<T: Typewire> Typewire for Vec<T> {
 
   #[cfg(target_arch = "wasm32")]
   fn from_js(value: wasm_bindgen::JsValue) -> Result<Self, Error> {
-    let arr: js_sys::Array = value.into();
+    use wasm_bindgen::JsCast as _;
+
+    let arr: js_sys::Array =
+      value.dyn_into().map_err(|_| Error::UnexpectedType { expected: "array" })?;
     let mut out = Self::with_capacity(arr.length() as usize);
     for i in 0..arr.length() {
       out.push(T::from_js(arr.get(i))?);
@@ -642,6 +649,7 @@ impl<T: Typewire> Typewire for Vec<T> {
 ///
 /// Does NOT require `T: PartialEq` — comparison uses JS reference identity.
 #[cfg(target_arch = "wasm32")]
+#[expect(clippy::missing_panics_doc, reason = "built-in diff hooks never fail")]
 pub fn patch_js_slice<'a, T: Typewire + 'a>(
   new: impl ExactSizeIterator<Item = &'a T> + Clone,
   old: &wasm_bindgen::JsValue,
@@ -689,7 +697,7 @@ pub fn patch_js_slice<'a, T: Typewire + 'a>(
   // so unchanged elements (same ref) are matched as Equal.
   let mut d = Compact::new(SimilarReplace::new(Capture::new()), &old_refs, &patched_refs);
   similar::algorithms::lcs::diff(&mut d, &old_refs, 0..old_len, &patched_refs, 0..new_len)
-    .unwrap_or(());
+    .expect("built-in diff hooks do not fail");
 
   let ops = d.into_inner().into_inner().into_ops();
 
@@ -777,7 +785,10 @@ impl<T: Typewire, const N: usize> Typewire for [T; N] {
 
   #[cfg(target_arch = "wasm32")]
   fn from_js(value: wasm_bindgen::JsValue) -> Result<Self, Error> {
-    let arr: js_sys::Array = value.into();
+    use wasm_bindgen::JsCast as _;
+
+    let arr: js_sys::Array =
+      value.dyn_into().map_err(|_| Error::UnexpectedType { expected: "array" })?;
     if arr.length() as usize != N {
       return Err(Error::InvalidValue {
         message: format!("expected array of length {N}, got {}", arr.length()),
@@ -1074,7 +1085,7 @@ impl Typewire for uuid::Uuid {
   #[cfg(target_arch = "wasm32")]
   fn from_js(value: wasm_bindgen::JsValue) -> Result<Self, Error> {
     let s = value.as_string().ok_or(Error::UnexpectedType { expected: "string" })?;
-    uuid::Uuid::try_parse(&s).map_err(|e| Error::InvalidValue { message: e.to_string() })
+    Self::try_parse(&s).map_err(|e| Error::InvalidValue { message: e.to_string() })
   }
 
   #[cfg(target_arch = "wasm32")]
@@ -1096,8 +1107,7 @@ impl Typewire for fractional_index::FractionalIndex {
   #[cfg(target_arch = "wasm32")]
   fn from_js(value: wasm_bindgen::JsValue) -> Result<Self, Error> {
     let s = value.as_string().ok_or(Error::UnexpectedType { expected: "string" })?;
-    fractional_index::FractionalIndex::from_string(&s)
-      .map_err(|e| Error::InvalidValue { message: e.to_string() })
+    Self::from_string(&s).map_err(|e| Error::InvalidValue { message: e.to_string() })
   }
 
   #[cfg(target_arch = "wasm32")]
@@ -1147,7 +1157,7 @@ impl Typewire for url::Url {
   #[cfg(target_arch = "wasm32")]
   fn from_js(value: wasm_bindgen::JsValue) -> Result<Self, Error> {
     let s = value.as_string().ok_or(Error::UnexpectedType { expected: "string" })?;
-    url::Url::parse(&s).map_err(|e| Error::InvalidValue { message: e.to_string() })
+    Self::parse(&s).map_err(|e| Error::InvalidValue { message: e.to_string() })
   }
 
   #[cfg(target_arch = "wasm32")]
@@ -1164,14 +1174,12 @@ impl Typewire for serde_json::Value {
   #[cfg(target_arch = "wasm32")]
   fn to_js(&self) -> wasm_bindgen::JsValue {
     match self {
-      serde_json::Value::Null => wasm_bindgen::JsValue::NULL,
-      serde_json::Value::Bool(b) => wasm_bindgen::JsValue::from_bool(*b),
-      serde_json::Value::Number(n) => {
-        wasm_bindgen::JsValue::from_f64(n.as_f64().unwrap_or(f64::NAN))
-      }
-      serde_json::Value::String(s) => wasm_bindgen::JsValue::from_str(s),
-      serde_json::Value::Array(arr) => array_ref(arr.iter()),
-      serde_json::Value::Object(map) => {
+      Self::Null => wasm_bindgen::JsValue::NULL,
+      Self::Bool(b) => wasm_bindgen::JsValue::from_bool(*b),
+      Self::Number(n) => wasm_bindgen::JsValue::from_f64(n.as_f64().unwrap_or(f64::NAN)),
+      Self::String(s) => wasm_bindgen::JsValue::from_str(s),
+      Self::Array(arr) => array_ref(arr.iter()),
+      Self::Object(map) => {
         let obj = js_sys::Object::new();
         for (k, v) in map {
           let _ = js_sys::Reflect::set(&obj, &wasm_bindgen::JsValue::from_str(k), &v.to_js());
@@ -1186,36 +1194,53 @@ impl Typewire for serde_json::Value {
     use wasm_bindgen::JsCast as _;
 
     if value.is_null() || value.is_undefined() {
-      Ok(serde_json::Value::Null)
+      Ok(Self::Null)
     } else if let Some(b) = value.as_bool() {
-      Ok(serde_json::Value::Bool(b))
+      Ok(Self::Bool(b))
     } else if let Some(n) = value.as_f64() {
       // JS only has f64 — recover integer representation for whole numbers
       // so that round-tripping preserves serde_json's i64/u64 distinction.
       if n.fract() == 0.0 {
-        #[expect(clippy::cast_possible_truncation)]
+        #[expect(
+          clippy::cast_possible_truncation,
+          reason = "intentional: detecting if f64 fits in i64"
+        )]
         let i = n as i64;
+        #[expect(
+          clippy::float_cmp,
+          clippy::cast_precision_loss,
+          reason = "exact round-trip check: i64 → f64 → i64 preserves value"
+        )]
         if i as f64 == n {
-          return Ok(serde_json::Value::Number(i.into()));
+          return Ok(Self::Number(i.into()));
         }
-        #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+          clippy::cast_possible_truncation,
+          clippy::cast_sign_loss,
+          reason = "intentional: detecting if f64 fits in u64"
+        )]
         let u = n as u64;
+        #[expect(
+          clippy::float_cmp,
+          clippy::cast_precision_loss,
+          reason = "exact round-trip check: u64 → f64 → u64 preserves value"
+        )]
         if u as f64 == n {
-          return Ok(serde_json::Value::Number(u.into()));
+          return Ok(Self::Number(u.into()));
         }
       }
-      serde_json::Number::from_f64(n)
-        .map(serde_json::Value::Number)
-        .ok_or(Error::InvalidValue { message: "invalid JSON number (NaN or Infinity)".into() })
+      serde_json::Number::from_f64(n).map(serde_json::Value::Number).ok_or_else(|| {
+        Error::InvalidValue { message: "invalid JSON number (NaN or Infinity)".into() }
+      })
     } else if let Some(s) = value.as_string() {
-      Ok(serde_json::Value::String(s))
+      Ok(Self::String(s))
     } else if js_sys::Array::is_array(&value) {
       let arr = js_sys::Array::from(&value);
       let mut vec = Vec::with_capacity(arr.length() as usize);
       for i in 0..arr.length() {
         vec.push(Self::from_js(arr.get(i))?);
       }
-      Ok(serde_json::Value::Array(vec))
+      Ok(Self::Array(vec))
     } else if let Some(obj) = value.dyn_ref::<js_sys::Object>() {
       let entries = js_sys::Object::entries(obj);
       let mut map = serde_json::Map::with_capacity(entries.length() as usize);
@@ -1225,7 +1250,7 @@ impl Typewire for serde_json::Value {
         let val = Self::from_js(pair.get(1))?;
         map.insert(key, val);
       }
-      Ok(serde_json::Value::Object(map))
+      Ok(Self::Object(map))
     } else {
       Err(Error::UnexpectedType { expected: "JSON value" })
     }
@@ -1238,7 +1263,9 @@ impl Typewire for serde_json::Value {
     // is a unique type. Without erasure the compiler generates an infinite chain
     // of distinct instantiations.
     let mut set = Some(set);
-    patch_js_json_value(self, old, &mut |v| (set.take().unwrap())(v));
+    patch_js_json_value(self, old, &mut |v| {
+      (set.take().expect("patch_js set callback invoked more than once"))(v);
+    });
   }
 }
 
@@ -1301,13 +1328,15 @@ impl Typewire for bytes::Bytes {
   #[cfg(target_arch = "wasm32")]
   fn from_js(value: wasm_bindgen::JsValue) -> Result<Self, Error> {
     use wasm_bindgen::JsCast as _;
-    if let Some(arr) = value.dyn_ref::<js_sys::Uint8ClampedArray>() {
-      Ok(Self::from(arr.to_vec()))
-    } else if let Some(arr) = value.dyn_ref::<js_sys::Uint8Array>() {
-      Ok(Self::from(arr.to_vec()))
-    } else {
-      Err(Error::UnexpectedType { expected: "Uint8ClampedArray or Uint8Array" })
-    }
+    value.dyn_ref::<js_sys::Uint8ClampedArray>().map_or_else(
+      || {
+        value.dyn_ref::<js_sys::Uint8Array>().map_or(
+          Err(Error::UnexpectedType { expected: "Uint8ClampedArray or Uint8Array" }),
+          |arr| Ok(Self::from(arr.to_vec())),
+        )
+      },
+      |arr| Ok(Self::from(arr.to_vec())),
+    )
   }
 
   #[cfg(target_arch = "wasm32")]
@@ -1328,9 +1357,11 @@ impl<T: Typewire + Eq + core::hash::Hash> Typewire for indexmap::IndexSet<T> {
 
   #[cfg(target_arch = "wasm32")]
   fn from_js(value: wasm_bindgen::JsValue) -> Result<Self, Error> {
+    use wasm_bindgen::JsCast as _;
+
     let arr: js_sys::Array =
-      value.try_into().map_err(|_| Error::UnexpectedType { expected: "array" })?;
-    let mut set = indexmap::IndexSet::with_capacity(arr.length() as usize);
+      value.dyn_into().map_err(|_| Error::UnexpectedType { expected: "array" })?;
+    let mut set = Self::with_capacity(arr.length() as usize);
     for i in 0..arr.length() {
       set.insert(T::from_js(arr.get(i))?);
     }
@@ -1344,7 +1375,7 @@ impl<T: Typewire + Eq + core::hash::Hash> Typewire for indexmap::IndexSet<T> {
       log::warn!("{field}: expected array, skipping");
       return Ok(Self::default());
     };
-    let mut set = indexmap::IndexSet::with_capacity(arr.length() as usize);
+    let mut set = Self::with_capacity(arr.length() as usize);
     for i in 0..arr.length() {
       match T::from_js(arr.get(i)) {
         Ok(v) => {
@@ -1382,7 +1413,7 @@ impl<K: Typewire + Eq + core::hash::Hash, V: Typewire> Typewire for indexmap::In
     let entries = js_sys::Object::entries(
       value.dyn_ref::<js_sys::Object>().ok_or(Error::UnexpectedType { expected: "object" })?,
     );
-    let mut map = indexmap::IndexMap::with_capacity(entries.length() as usize);
+    let mut map = Self::with_capacity(entries.length() as usize);
     for i in 0..entries.length() {
       let pair: js_sys::Array = entries.get(i).into();
       let key = K::from_js(pair.get(0))?;
@@ -1400,7 +1431,7 @@ impl<K: Typewire + Eq + core::hash::Hash, V: Typewire> Typewire for indexmap::In
       return Ok(Self::default());
     };
     let entries = js_sys::Object::entries(obj);
-    let mut map = indexmap::IndexMap::with_capacity(entries.length() as usize);
+    let mut map = Self::with_capacity(entries.length() as usize);
     for i in 0..entries.length() {
       let pair: js_sys::Array = entries.get(i).into();
       match (K::from_js(pair.get(0)), V::from_js(pair.get(1))) {

@@ -228,7 +228,10 @@ fn coded_flat_field(f: &Field, c: &TokenStream) -> (TokenStream, TokenStream) {
     )
   };
 
-  let field_type = quote! { #c::FlatField<#ident_len, #wire_len, #ty_type> };
+  let alias_count = u32::try_from(f.aliases.len()).unwrap();
+  let (aliases_type, aliases_value) = coded_alias_list(&f.aliases, c);
+
+  let field_type = quote! { #c::FlatField<#ident_len, #wire_len, #ty_type, #aliases_type> };
   let field_value = quote! {
     #c::FlatField {
       ident: #c::Ident::new(*#ident_bytes),
@@ -236,9 +239,29 @@ fn coded_flat_field(f: &Field, c: &TokenStream) -> (TokenStream, TokenStream) {
       wire_name: #c::Ident::new(*#wire_bytes),
       flags: ::typewire::schema::FieldFlags::from_bits_retain(#flags_bits),
       default: #default_kind,
+      alias_count: #c::U32Le::new(#alias_count),
+      aliases: #aliases_value,
     }
   };
   (field_type, field_value)
+}
+
+/// Returns `(type_tokens, value_tokens)` for a packed alias list.
+fn coded_alias_list(aliases: &[String], c: &TokenStream) -> (TokenStream, TokenStream) {
+  if aliases.is_empty() {
+    return (quote! { #c::Types0 }, quote! { #c::Types0() });
+  }
+  let n = aliases.len();
+  let types_name = types_ident(n);
+  let (alias_types, alias_values): (Vec<_>, Vec<_>) = aliases
+    .iter()
+    .map(|a| {
+      let a_len = a.len();
+      let a_bytes = proc_macro2::Literal::byte_string(a.as_bytes());
+      (quote! { #c::Ident<#a_len> }, quote! { #c::Ident::new(*#a_bytes) })
+    })
+    .unzip();
+  (quote! { #c::#types_name<#(#alias_types),*> }, quote! { #c::#types_name(#(#alias_values),*) })
 }
 
 // ---------------------------------------------------------------------------
@@ -337,9 +360,15 @@ fn coded_flat_variant(v: &Variant, c: &TokenStream) -> (TokenStream, TokenStream
   let flags_bits = v.flags.bits();
   let is_skipped = v.flags.intersects(VariantFlags::SKIP_SER | VariantFlags::SKIP_DE);
 
+  // Variant aliases are all_wire_names[1..] (first is the primary wire_name).
+  let variant_aliases: Vec<String> = v.all_wire_names.iter().skip(1).cloned().collect();
+  let v_alias_count = u32::try_from(variant_aliases.len()).unwrap();
+  let (v_aliases_type, v_aliases_value) = coded_alias_list(&variant_aliases, c);
+
   // Skipped variants emit no child types (avoids requiring Typewire on internal types)
   if is_skipped {
-    let variant_type = quote! { #c::FlatVariant<#ident_len, #wire_len> };
+    let variant_type =
+      quote! { #c::FlatVariant<#ident_len, #wire_len, #c::Types0, #v_aliases_type> };
     let variant_value = quote! {
       #c::FlatVariant {
         ident: #c::Ident::new(*#ident_bytes),
@@ -348,6 +377,8 @@ fn coded_flat_variant(v: &Variant, c: &TokenStream) -> (TokenStream, TokenStream
         kind: #c::VariantKindTag::Unit,
         child_count: #c::U32Le::new(0u32),
         fields: #c::Types0(),
+        alias_count: #c::U32Le::new(#v_alias_count),
+        aliases: #v_aliases_value,
       }
     };
     return (variant_type, variant_value);
@@ -355,7 +386,8 @@ fn coded_flat_variant(v: &Variant, c: &TokenStream) -> (TokenStream, TokenStream
 
   match &v.kind {
     VariantKind::Unit => {
-      let variant_type = quote! { #c::FlatVariant<#ident_len, #wire_len> };
+      let variant_type =
+        quote! { #c::FlatVariant<#ident_len, #wire_len, #c::Types0, #v_aliases_type> };
       let variant_value = quote! {
         #c::FlatVariant {
           ident: #c::Ident::new(*#ident_bytes),
@@ -364,6 +396,8 @@ fn coded_flat_variant(v: &Variant, c: &TokenStream) -> (TokenStream, TokenStream
           kind: #c::VariantKindTag::Unit,
           child_count: #c::U32Le::new(0u32),
           fields: #c::Types0(),
+          alias_count: #c::U32Le::new(#v_alias_count),
+          aliases: #v_aliases_value,
         }
       };
       (variant_type, variant_value)
@@ -377,7 +411,12 @@ fn coded_flat_variant(v: &Variant, c: &TokenStream) -> (TokenStream, TokenStream
         fields.iter().map(|f| coded_flat_field(f, c)).unzip();
 
       let variant_type = quote! {
-        #c::FlatVariant<#ident_len, #wire_len, #c::#types_name<#(#field_types),*>>
+        #c::FlatVariant<
+          #ident_len,
+          #wire_len,
+          #c::#types_name<#(#field_types),*>,
+          #v_aliases_type,
+        >
       };
       let variant_value = quote! {
         #c::FlatVariant {
@@ -387,6 +426,8 @@ fn coded_flat_variant(v: &Variant, c: &TokenStream) -> (TokenStream, TokenStream
           kind: #c::VariantKindTag::Named,
           child_count: #c::U32Le::new(#child_count),
           fields: #c::#types_name(#(#field_values),*),
+          alias_count: #c::U32Le::new(#v_alias_count),
+          aliases: #v_aliases_value,
         }
       };
       (variant_type, variant_value)
@@ -402,7 +443,12 @@ fn coded_flat_variant(v: &Variant, c: &TokenStream) -> (TokenStream, TokenStream
         types.iter().map(|ty| quote! { <#ty as ::typewire::Typewire>::IDENT }).collect();
 
       let variant_type = quote! {
-        #c::FlatVariant<#ident_len, #wire_len, #c::#types_name<#(#ident_types),*>>
+        #c::FlatVariant<
+          #ident_len,
+          #wire_len,
+          #c::#types_name<#(#ident_types),*>,
+          #v_aliases_type,
+        >
       };
       let variant_value = quote! {
         #c::FlatVariant {
@@ -412,6 +458,8 @@ fn coded_flat_variant(v: &Variant, c: &TokenStream) -> (TokenStream, TokenStream
           kind: #c::VariantKindTag::Unnamed,
           child_count: #c::U32Le::new(#child_count),
           fields: #c::#types_name(#(#ident_values),*),
+          alias_count: #c::U32Le::new(#v_alias_count),
+          aliases: #v_aliases_value,
         }
       };
       (variant_type, variant_value)

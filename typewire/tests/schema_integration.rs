@@ -137,6 +137,8 @@ fn derived_struct_record_decodes() {
         wire_name: Ident::new(*b"x"),
         flags: FieldFlags::empty(),
         default: FieldDefaultKind::None,
+        alias_count: U32Le::new(0),
+        aliases: Types0(),
       },
       FlatField {
         ident: Ident::new(*b"y"),
@@ -144,6 +146,8 @@ fn derived_struct_record_decodes() {
         wire_name: Ident::new(*b"y"),
         flags: FieldFlags::empty(),
         default: FieldDefaultKind::None,
+        alias_count: U32Le::new(0),
+        aliases: Types0(),
       },
     ),
   });

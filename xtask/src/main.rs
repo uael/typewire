@@ -113,8 +113,12 @@ fn lint(sh: &Shell, fix: bool) -> Result<()> {
   // typewire-derive.
   cmd!(sh, "cargo clippy -p typewire-derive --tests {args...}").run_echo()?;
 
-  // wasm32: typewire + examples.
+  // wasm32: typewire + examples (default features).
   cmd!(sh, "cargo clippy -p typewire -p todo-app --target {WASM_TARGET} {args...}").run_echo()?;
+
+  // wasm32: typewire with all optional type features.
+  cmd!(sh, "cargo clippy -p typewire --target {WASM_TARGET} --features {type_features} {args...}")
+    .run_echo()?;
 
   fmt(sh, !fix)
 }
@@ -150,14 +154,20 @@ fn test_e2e(sh: &mut Shell) -> Result<()> {
   cmd!(sh, "diff examples/todo-app/types.d.ts examples/todo-app/types.gen.d.ts").run_echo()?;
 
   // Assert the typewire_schemas section was stripped from the binary.
+  let stripped_output = cmd!(
+    sh,
+    "cargo run -p typewire --features cli -- target/{WASM_TARGET}/release/todo_app.wasm -o /dev/null"
+  )
+  .ignore_status()
+  .output()?;
   assert!(
-    cmd!(
-      sh,
-      "cargo run -p typewire --features cli -- target/{WASM_TARGET}/release/todo_app.wasm -o /dev/null"
-    )
-    .run()
-    .is_err(),
-    "typewire_schemas section should have been stripped"
+    !stripped_output.status.success(),
+    "typewire_schemas section should have been stripped, but CLI succeeded"
+  );
+  let stderr = String::from_utf8_lossy(&stripped_output.stderr);
+  assert!(
+    stderr.contains("section") || stderr.contains("not found") || stderr.contains("no schema"),
+    "expected section-not-found error, got: {stderr}"
   );
 
   // Generate JS bindings.

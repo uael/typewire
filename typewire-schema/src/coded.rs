@@ -308,29 +308,41 @@ impl_from_u8!(StructShapeTag, Unit, 3);
 // Variable-length children use `Types{N}` tuple wrappers.
 
 /// Flat field record (child of struct/variant).
+///
 /// `TyIdent` is the field type's ident (e.g., `Ident<4>` for `bool`,
 /// `OptionIdent<Ident<6>>` for `Option<Center>`).
+/// `Aliases` holds packed `Ident<N>` values for field wire-name aliases.
 #[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(C, packed)]
-pub struct FlatField<const IDENT: usize, const WIRE: usize, TyIdent: Copy> {
+pub struct FlatField<const IDENT: usize, const WIRE: usize, TyIdent: Copy, Aliases: Copy = Types0> {
   pub ident: Ident<IDENT>,
   pub ty: TyIdent,
   pub wire_name: Ident<WIRE>,
   pub flags: FieldFlags,
   pub default: FieldDefaultKind,
+  pub alias_count: U32Le,
+  pub aliases: Aliases,
 }
 
 /// Flat variant record (child of enum). Contains its own fields inline
-/// via the `Fields` type parameter.
+/// via the `Fields` type parameter. `Aliases` holds packed `Ident<N>`
+/// values for variant wire-name aliases.
 #[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(C, packed)]
-pub struct FlatVariant<const IDENT: usize, const WIRE: usize, Fields: Copy = Types0> {
+pub struct FlatVariant<
+  const IDENT: usize,
+  const WIRE: usize,
+  Fields: Copy = Types0,
+  Aliases: Copy = Types0,
+> {
   pub ident: Ident<IDENT>,
   pub wire_name: Ident<WIRE>,
   pub flags: VariantFlags,
   pub kind: VariantKindTag,
   pub child_count: U32Le,
   pub fields: Fields,
+  pub alias_count: U32Le,
+  pub aliases: Aliases,
 }
 
 // -- Top-level schema records ------------------------------------------

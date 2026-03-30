@@ -1,0 +1,5 @@
+error: cannot combine `tag` and `untagged`
+ --> tests/compile_fail/tag_and_untagged.rs:5:6
+  |
+5 | enum Bad {
+  |      ^^^

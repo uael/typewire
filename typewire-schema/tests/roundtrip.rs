@@ -111,6 +111,8 @@ mod ts {
           wire_name: Ident::new(*b"x"),
           flags: FieldFlags::empty(),
           default: FieldDefaultKind::None,
+          alias_count: U32Le::new(0),
+          aliases: Types0(),
         },
         FlatField {
           ident: Ident::new(*b"y"),
@@ -118,6 +120,8 @@ mod ts {
           wire_name: Ident::new(*b"y"),
           flags: FieldFlags::empty(),
           default: FieldDefaultKind::None,
+          alias_count: U32Le::new(0),
+          aliases: Types0(),
         },
       ),
     });
@@ -182,6 +186,101 @@ mod ts {
     match &schemas[0] {
       Schema::Struct(Struct { ident, shape: StructShape::Unit, .. }) => assert_eq!(ident, "Empty"),
       other => panic!("expected unit struct, got: {other:?}"),
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // Field alias roundtrip
+  // -----------------------------------------------------------------------
+
+  #[test]
+  fn field_alias_roundtrip() {
+    type AliasField = FlatField<4, 4, PrimitiveIdent, Types2<Ident<6>, Ident<4>>>;
+    type Fields = Types1<AliasField>;
+    let record: Record<FlatStruct<6, Fields>> = Record::new(FlatStruct {
+      tag: Tag::Struct,
+      ident: Ident::new(*b"Config"),
+      flags: StructFlags::empty(),
+      shape: StructShapeTag::Named,
+      generic_count: U32Le::new(0),
+      field_count: U32Le::new(1),
+      fields: Types1(FlatField {
+        ident: Ident::new(*b"name"),
+        ty: PrimitiveIdent::new(Scalar::str),
+        wire_name: Ident::new(*b"name"),
+        flags: FieldFlags::empty(),
+        default: FieldDefaultKind::None,
+        alias_count: U32Le::new(2),
+        aliases: Types2(Ident::new(*b"nombre"), Ident::new(*b"naam")),
+      }),
+    });
+    let bytes = record.as_bytes();
+    let schemas = decode::parse_section(bytes).unwrap();
+
+    assert_eq!(schemas.len(), 1);
+    match &schemas[0] {
+      Schema::Struct(Struct { shape: StructShape::Named(fields), .. }) => {
+        assert_eq!(fields.len(), 1);
+        assert_eq!(fields[0].wire_name, "name");
+        assert_eq!(fields[0].aliases, vec!["nombre", "naam"]);
+      }
+      other => panic!("expected named struct, got: {other:?}"),
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // Variant alias roundtrip
+  // -----------------------------------------------------------------------
+
+  #[test]
+  fn variant_alias_roundtrip() {
+    type V1 = FlatVariant<3, 3, Types0, Types1<Ident<5>>>;
+    type V2 = FlatVariant<5, 5>;
+    let record: Record<FlatEnum<5, 0, 0, Types2<V1, V2>>> = Record::new(FlatEnum {
+      tag: Tag::Enum,
+      ident: Ident::new(*b"Color"),
+      flags: EnumFlags::ALL_UNIT,
+      tagging: TaggingKind::External,
+      tag_key: Ident::new(*b""),
+      content_key: Ident::new(*b""),
+      generic_count: U32Le::new(0),
+      variant_count: U32Le::new(2),
+      variants: Types2(
+        FlatVariant {
+          ident: Ident::new(*b"Red"),
+          wire_name: Ident::new(*b"red"),
+          flags: VariantFlags::empty(),
+          kind: VariantKindTag::Unit,
+          child_count: U32Le::new(0),
+          fields: Types0(),
+          alias_count: U32Le::new(1),
+          aliases: Types1(Ident::new(*b"rouge")),
+        },
+        FlatVariant {
+          ident: Ident::new(*b"Green"),
+          wire_name: Ident::new(*b"green"),
+          flags: VariantFlags::empty(),
+          kind: VariantKindTag::Unit,
+          child_count: U32Le::new(0),
+          fields: Types0(),
+          alias_count: U32Le::new(0),
+          aliases: Types0(),
+        },
+      ),
+    });
+    let bytes = record.as_bytes();
+    let schemas = decode::parse_section(bytes).unwrap();
+
+    assert_eq!(schemas.len(), 1);
+    match &schemas[0] {
+      Schema::Enum(e) => {
+        assert_eq!(e.variants.len(), 2);
+        assert_eq!(e.variants[0].wire_name, "red");
+        assert_eq!(e.variants[0].all_wire_names, vec!["red", "rouge"]);
+        assert_eq!(e.variants[1].wire_name, "green");
+        assert_eq!(e.variants[1].all_wire_names, vec!["green"]);
+      }
+      other => panic!("expected enum, got: {other:?}"),
     }
   }
 
@@ -256,6 +355,8 @@ mod ts {
           kind: VariantKindTag::Unit,
           child_count: U32Le::new(0),
           fields: Types0(),
+          alias_count: U32Le::new(0),
+          aliases: Types0(),
         },
         FlatVariant {
           ident: Ident::new(*b"Green"),
@@ -264,6 +365,8 @@ mod ts {
           kind: VariantKindTag::Unit,
           child_count: U32Le::new(0),
           fields: Types0(),
+          alias_count: U32Le::new(0),
+          aliases: Types0(),
         },
       ),
     })
@@ -314,7 +417,11 @@ mod ts {
           wire_name: Ident::new(*b"speed"),
           flags: FieldFlags::empty(),
           default: FieldDefaultKind::None,
+          alias_count: U32Le::new(0),
+          aliases: Types0(),
         }),
+        alias_count: U32Le::new(0),
+        aliases: Types0(),
       }),
     });
 
@@ -359,6 +466,8 @@ mod ts {
         kind: VariantKindTag::Unnamed,
         child_count: U32Le::new(1),
         fields: Types1(PrimitiveIdent::new(Scalar::f64)),
+        alias_count: U32Le::new(0),
+        aliases: Types0(),
       }),
     });
 
@@ -399,6 +508,8 @@ mod ts {
         kind: VariantKindTag::Unit,
         child_count: U32Le::new(0),
         fields: Types0(),
+        alias_count: U32Le::new(0),
+        aliases: Types0(),
       }),
     });
 
@@ -487,6 +598,8 @@ mod ts {
         wire_name: Ident::new(*b"v"),
         flags: FieldFlags::empty(),
         default: FieldDefaultKind::Default,
+        alias_count: U32Le::new(0),
+        aliases: Types0(),
       }),
     });
     let bytes = record.as_bytes();
@@ -530,6 +643,8 @@ mod ts {
         wire_name: Ident::new(*b"items"),
         flags: FieldFlags::empty(),
         default: FieldDefaultKind::None,
+        alias_count: U32Le::new(0),
+        aliases: Types0(),
       }),
     });
     let bytes = record.as_bytes();
@@ -568,6 +683,8 @@ mod ts {
         wire_name: Ident::new(*b"map"),
         flags: FieldFlags::empty(),
         default: FieldDefaultKind::None,
+        alias_count: U32Le::new(0),
+        aliases: Types0(),
       }),
     });
     let bytes = record.as_bytes();
@@ -610,6 +727,8 @@ mod ts {
         wire_name: Ident::new(*b"child"),
         flags: FieldFlags::empty(),
         default: FieldDefaultKind::None,
+        alias_count: U32Le::new(0),
+        aliases: Types0(),
       }),
     });
     let bytes = record.as_bytes();
@@ -648,6 +767,8 @@ mod ts {
         wire_name: Ident::new(*b"skipped"),
         flags: FieldFlags::SKIP_SER | FieldFlags::SKIP_DE,
         default: FieldDefaultKind::None,
+        alias_count: U32Le::new(0),
+        aliases: Types0(),
       }),
     });
     let bytes = record.as_bytes();
@@ -687,6 +808,8 @@ mod ts {
         wire_name: Ident::new(*b"n"),
         flags: FieldFlags::empty(),
         default: FieldDefaultKind::Default,
+        alias_count: U32Le::new(0),
+        aliases: Types0(),
       }),
     });
     let bytes = record.as_bytes();
@@ -726,6 +849,8 @@ mod ts {
           wire_name: Ident::new(*b"x"),
           flags: FieldFlags::empty(),
           default: FieldDefaultKind::None,
+          alias_count: U32Le::new(0),
+          aliases: Types0(),
         },
         FlatField {
           ident: Ident::new(*b"y"),
@@ -733,6 +858,8 @@ mod ts {
           wire_name: Ident::new(*b"y"),
           flags: FieldFlags::empty(),
           default: FieldDefaultKind::None,
+          alias_count: U32Le::new(0),
+          aliases: Types0(),
         },
       ),
     });
@@ -759,6 +886,8 @@ mod ts {
         wire_name: Ident::new(*b"v"),
         flags: FieldFlags::empty(),
         default: FieldDefaultKind::Default,
+        alias_count: U32Le::new(0),
+        aliases: Types0(),
       }),
     });
     let bytes = record.as_bytes();
@@ -841,6 +970,8 @@ mod ts {
           kind: VariantKindTag::Unit,
           child_count: U32Le::new(0),
           fields: Types0(),
+          alias_count: U32Le::new(0),
+          aliases: Types0(),
         },
         FlatVariant {
           ident: Ident::new(*b"Rect"),
@@ -854,7 +985,11 @@ mod ts {
             wire_name: Ident::new(*b"width"),
             flags: FieldFlags::empty(),
             default: FieldDefaultKind::None,
+            alias_count: U32Le::new(0),
+            aliases: Types0(),
           }),
+          alias_count: U32Le::new(0),
+          aliases: Types0(),
         },
       ),
     });
@@ -889,7 +1024,11 @@ mod ts {
           wire_name: Ident::new(*b"speed"),
           flags: FieldFlags::empty(),
           default: FieldDefaultKind::None,
+          alias_count: U32Le::new(0),
+          aliases: Types0(),
         }),
+        alias_count: U32Le::new(0),
+        aliases: Types0(),
       }),
     });
     let bytes = record.as_bytes();
@@ -917,6 +1056,8 @@ mod ts {
         kind: VariantKindTag::Unnamed,
         child_count: U32Le::new(1),
         fields: Types1(PrimitiveIdent::new(Scalar::f64)),
+        alias_count: U32Le::new(0),
+        aliases: Types0(),
       }),
     });
     let bytes = record.as_bytes();
@@ -969,6 +1110,8 @@ mod ts {
           wire_name: Ident::new(*b"skipped"),
           flags: FieldFlags::SKIP_SER,
           default: FieldDefaultKind::None,
+          alias_count: U32Le::new(0),
+          aliases: Types0(),
         },
         FlatField {
           ident: Ident::new(*b"kept"),
@@ -976,6 +1119,8 @@ mod ts {
           wire_name: Ident::new(*b"kept"),
           flags: FieldFlags::empty(),
           default: FieldDefaultKind::None,
+          alias_count: U32Le::new(0),
+          aliases: Types0(),
         },
       ),
     });
@@ -1001,6 +1146,8 @@ mod ts {
         wire_name: Ident::new(*b"items"),
         flags: FieldFlags::empty(),
         default: FieldDefaultKind::None,
+        alias_count: U32Le::new(0),
+        aliases: Types0(),
       }),
     });
     let bytes = record.as_bytes();
@@ -1025,6 +1172,8 @@ mod ts {
         wire_name: Ident::new(*b"map"),
         flags: FieldFlags::empty(),
         default: FieldDefaultKind::None,
+        alias_count: U32Le::new(0),
+        aliases: Types0(),
       }),
     });
     let bytes = record.as_bytes();
@@ -1056,6 +1205,8 @@ mod ts {
         wire_name: Ident::new(*b"x"),
         flags: FieldFlags::empty(),
         default: FieldDefaultKind::None,
+        alias_count: U32Le::new(0),
+        aliases: Types0(),
       }),
     });
     let s_bytes = s.as_bytes();
@@ -1171,6 +1322,8 @@ mod ts {
           kind: VariantKindTag::Unit,
           child_count: U32Le::new(0),
           fields: Types0(),
+          alias_count: U32Le::new(0),
+          aliases: Types0(),
         },
         FlatVariant {
           ident: Ident::new(*b"Hidden"),
@@ -1179,6 +1332,8 @@ mod ts {
           kind: VariantKindTag::Unit,
           child_count: U32Le::new(0),
           fields: Types0(),
+          alias_count: U32Le::new(0),
+          aliases: Types0(),
         },
       ),
     });

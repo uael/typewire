@@ -285,6 +285,9 @@ fn struct_from_js_body(s: &SchemaStruct) -> TokenStream {
       let field_bindings = named_field_bindings(fields);
       let field_names: Vec<_> = fields.iter().map(|f| &f.ident).collect();
 
+      // NOTE: Flattened fields are excluded from the deny check because their
+      // sub-keys are not known at this level. This matches serde's behavior:
+      // serde also cannot validate unknown keys inside flattened types.
       let deny_check = if s.flags.contains(StructFlags::DENY_UNKNOWN_FIELDS) {
         let known_keys: Vec<&str> = fields
           .iter()

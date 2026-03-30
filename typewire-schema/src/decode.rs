@@ -315,15 +315,13 @@ fn parse_flat_field(r: &mut Reader<'_>) -> Result<Field, Error> {
     FieldDefaultKind::Default | FieldDefaultKind::Path => FieldDefault::Default,
   };
 
-  Ok(Field {
-    ident,
-    ty: ty.into(),
-    wire_name,
-    flags,
-    aliases: Vec::new(),
-    default,
-    skip_serializing_if: None,
-  })
+  let alias_count = r.read_u32_le()? as usize;
+  let mut aliases = Vec::with_capacity(alias_count);
+  for _ in 0..alias_count {
+    aliases.push(r.read_ident_str()?);
+  }
+
+  Ok(Field { ident, ty: ty.into(), wire_name, flags, aliases, default, skip_serializing_if: None })
 }
 
 fn parse_flat_variant(r: &mut Reader<'_>) -> Result<Variant, Error> {
@@ -352,6 +350,12 @@ fn parse_flat_variant(r: &mut Reader<'_>) -> Result<Variant, Error> {
     }
   };
 
-  let all_wire_names = vec![wire_name.clone()];
+  let alias_count = r.read_u32_le()? as usize;
+  let mut all_wire_names = Vec::with_capacity(1 + alias_count);
+  all_wire_names.push(wire_name.clone());
+  for _ in 0..alias_count {
+    all_wire_names.push(r.read_ident_str()?);
+  }
+
   Ok(Variant { ident, wire_name, all_wire_names, flags, kind })
 }

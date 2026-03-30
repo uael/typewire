@@ -59,6 +59,26 @@ pub enum ContainerDefault {
 }
 
 impl ContainerAttrs {
+  /// Validate that no incompatible attribute combinations are present.
+  pub fn validate(&self, span: proc_macro2::Span) -> Result<(), syn::Error> {
+    if self.from.is_some() && self.try_from.is_some() {
+      return Err(syn::Error::new(
+        span,
+        "cannot combine `from` and `try_from` — use one or the other",
+      ));
+    }
+    if self.tag.is_some() && self.untagged {
+      return Err(syn::Error::new(span, "cannot combine `tag` and `untagged`"));
+    }
+    if self.content.is_some() && self.tag.is_none() {
+      return Err(syn::Error::new(
+        span,
+        "`content` requires `tag` (adjacently-tagged representation)",
+      ));
+    }
+    Ok(())
+  }
+
   pub fn from_attrs(attrs: &[Attribute]) -> Self {
     let mut out = Self::default();
     for attr in diffable_attrs(attrs).chain(typewire_attrs(attrs)) {
