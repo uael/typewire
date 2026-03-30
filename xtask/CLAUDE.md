@@ -13,7 +13,7 @@ Dev automation. Single binary with subcommands for formatting, linting, and test
 | `cargo xtask test` | All test suites |
 | `cargo xtask test unit` | Native tests + schema roundtrips (`--features typescript`) |
 | `cargo xtask test wasm` | wasm32 tests via `wasm-bindgen-test` |
-| `cargo xtask test e2e` | Build wasm → typegen snapshot diff → tsc type-check → node runtime |
+| `cargo xtask test e2e` | Build wasm → typegen (strips section) → snapshot diff → assert stripped → tsc → node |
 
 ## Lint Passes
 

@@ -31,8 +31,8 @@ typewire provides bidirectional Rust↔JavaScript type conversion for wasm32 tar
      (derive)              (typewire-schema)       (CLI)       (codegen)
 ```
 
-1. `#[derive(Typewire)]` analyzes types and emits `to_js`/`from_js`/`patch_js` + schema records in link sections
-2. The `typewire` CLI extracts schema records from compiled binaries and generates TypeScript declarations
+1. `#[derive(Typewire)]` analyzes types and emits `to_js`/`from_js`/`patch_js` + schema records in link sections (when `schemas` feature is enabled)
+2. The `typewire` CLI extracts schema records from compiled binaries, generates TypeScript declarations, and strips the schema section
 3. The generated `.d.ts` types match the wire format of the Rust types
 
 ### Workspace Crates
@@ -40,9 +40,9 @@ typewire provides bidirectional Rust↔JavaScript type conversion for wasm32 tar
 | Crate | Role |
 |-------|------|
 | `typewire/` | Main library: `Typewire` trait, primitive/compound impls, error types, CLI binary |
-| `typewire-derive/` | Proc-macro: `#[derive(Typewire)]` with full serde attribute support |
+| `typewire-derive/` | Proc-macro: `#[derive(Typewire)]` with full serde/typewire attribute support |
 | `typewire-schema/` | Schema metadata: coded binary format, encode/decode, TypeScript emitter |
-| `xtask/` | Dev automation: fmt, lint (8 clippy passes), test (unit/wasm/e2e) |
+| `xtask/` | Dev automation: fmt, lint (9 clippy passes), test (unit/wasm/e2e) |
 | `examples/todo-app/` | End-to-end example: wasm cdylib with TypeScript type-checking |
 
 ### Feature Matrix
@@ -53,6 +53,11 @@ typewire provides bidirectional Rust↔JavaScript type conversion for wasm32 tar
 - `typescript` — implies `decode`, adds TypeScript emitter
 
 These cannot be combined in a single compilation. The xtask lint command handles this by running separate clippy passes per feature combination.
+
+`typewire` and `typewire-derive` share a `schemas` feature (opt-in):
+- When enabled, `#[derive(Typewire)]` embeds schema records in a `typewire_schemas` link section
+- When disabled, only the `Typewire` trait impl is generated (no link section overhead)
+- Required for TypeScript codegen; the todo-app example enables it
 
 ## Releasing
 
@@ -82,8 +87,12 @@ Use [Conventional Commits](https://www.conventionalcommits.org/) — release-plz
 
 ## Code Style
 
-- 2-space indentation, max 100 columns
+- 2-space indentation everywhere (including inside `macro_rules!` and `quote!` blocks), max 100 columns
 - Imports: reordered, grouped by `StdExternalCrate`, granularity `Crate`
 - Clippy: `pedantic` + `nursery` at warn; `dbg_macro`, `allow_attributes`, `missing_safety_doc`, `undocumented_unsafe_blocks` denied
 - No `#[allow]` — use `#[expect(lint, reason = "...")]` when suppression is necessary
 - Dual-licensed: Apache-2.0 OR MIT
+
+## Maintenance
+
+When making changes that affect a crate's public API, features, file structure, or conventions, **always update the corresponding `CLAUDE.md`** files (root and per-crate) to keep them accurate.

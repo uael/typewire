@@ -9,9 +9,9 @@ Schema metadata crate. Defines the type metadata pipeline: encode → binary →
 | `src/lib.rs` | `Schema` enum, `Field`, `Struct`, `Enum`, `Variant`, flags, `repr` module |
 | `src/scalar.rs` | `Scalar` enum — 24 leaf type identifiers |
 | `src/coded.rs` | Binary format: `#[repr(C, packed)]` types for link-section embedding |
-| `src/encode.rs` | (feature `encode`) `Schema` → `TokenStream` for link-section records |
-| `src/decode.rs` | (feature `decode`) Link-section bytes → `Schema` with owned data |
-| `src/typescript.rs` | (feature `typescript`) `Schema` → `.d.ts` declarations |
+| `src/encode.rs` | (feature `encode`) `Schema` → `TokenStream` for link-section records (`generate_schema_and_section(schema, emit_section)`) |
+| `src/decode.rs` | (feature `decode`) Link-section bytes → `Vec<Schema>` with owned data |
+| `src/typescript.rs` | (feature `typescript`) `impl IntoIterator<Item = &Schema>` → `.d.ts` string |
 
 ## Three-Stage Pipeline
 

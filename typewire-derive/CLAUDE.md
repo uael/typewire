@@ -14,22 +14,22 @@ Proc-macro crate providing `#[derive(Typewire)]`.
 
 ## How It Works
 
-1. `expand::analyze()` parses the `DeriveInput` + serde/typewire attributes into a `Schema`
-2. `encode::generate_schema_and_section()` (from `typewire-schema`) emits the link-section record
+1. `expand::analyze()` parses the `DeriveInput` + serde/diffable/typewire attributes into a `Schema`
+2. `encode::generate_schema_and_section()` (from `typewire-schema`) emits the link-section record (gated behind `schemas` feature)
 3. `WasmCodegen` implements `Codegen` trait to emit wasm32-specific conversion code
 
-## Supported Serde Attributes
+## Features
 
-Container: `rename_all`, `tag`, `content`, `untagged`, `transparent`, `default`, `deny_unknown_fields`, `from`, `try_from`, `into`
+| Feature | What it enables |
+|---------|----------------|
+| `schemas` | Emits link-section records for TypeScript codegen (opt-in, propagated from `typewire/schemas`) |
 
-Variant: `rename`, `alias`, `rename_all`, `skip`, `skip_serializing`, `skip_deserializing`, `other`, `untagged`
+## Attributes
 
-Field: `rename`, `alias`, `skip`, `default`, `flatten`, `skip_serializing_if`, `with = "serde_bytes"`
+All attributes below work under `#[serde(...)]`, `#[diffable(...)]`, or `#[typewire(...)]`. The `typewire` namespace is a superset — users can use it exclusively without needing `#[serde]` or `#[diffable]`.
 
-## Typewire-Specific Attributes
+**Container:** `rename_all`, `rename_all_fields`, `tag`, `content`, `untagged`, `transparent`, `default`, `deny_unknown_fields`, `from`, `try_from`, `into`, `atomic`, `visit_transparent`
 
-- `#[typewire(base64)]` — `Vec<u8>` as base64 string
-- `#[typewire(display)]` — use `Display`/`FromStr` for string conversion
-- `#[typewire(lenient)]` — skip errors during `from_js` instead of propagating
-- `#[diffable(atomic)]` — compare as a whole, no field-level patching
-- `#[diffable(visit_transparent)]` — delegate `patch_js` to inner field
+**Variant:** `rename`, `alias`, `rename_all`, `skip`, `skip_serializing`, `skip_deserializing`, `other`, `untagged`
+
+**Field:** `rename`, `alias`, `skip`, `default`, `flatten`, `skip_serializing_if`, `with = "serde_bytes"`, `base64`, `display`, `lenient`

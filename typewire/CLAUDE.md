@@ -31,6 +31,7 @@ All `to_js`/`from_js`/`patch_js` methods are `#[cfg(target_arch = "wasm32")]`. O
 | Feature | What it enables |
 |---------|----------------|
 | `derive` (default) | Re-exports `#[derive(Typewire)]` from `typewire-derive` |
+| `schemas` | Embeds schema records in link sections (opt-in, propagates to `typewire-derive`) |
 | `uuid`, `chrono`, `url`, `bytes`, `indexmap`, `fractional_index`, `base64`, `serde_json` | `Typewire` impls for these types |
 | `cli` | Binary target + `typewire-schema/typescript` for codegen |
 
