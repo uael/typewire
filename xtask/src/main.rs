@@ -27,12 +27,16 @@ enum Command {
     #[arg(long)]
     fix: bool,
   },
+  /// Run all tests (native, wasm32, schema roundtrips, e2e)
+  Test,
 }
 
 /// Project root directory.
 static ROOT: LazyLock<PathBuf> = LazyLock::new(|| {
   std::path::Path::new(env!("CARGO_MANIFEST_DIR")).ancestors().nth(1).unwrap().to_path_buf()
 });
+
+const WASM_TARGET: &str = "wasm32-unknown-unknown";
 
 fn main() -> Result<()> {
   let cli = Cli::parse();
@@ -43,6 +47,7 @@ fn main() -> Result<()> {
   match cli.command {
     Command::Fmt { check } => fmt(&sh, check),
     Command::Lint { fix } => lint(&sh, fix),
+    Command::Test => test(&sh),
   }
 }
 
@@ -86,8 +91,39 @@ fn lint(sh: &Shell, fix: bool) -> Result<()> {
   cmd!(sh, "cargo clippy -p typewire-derive --tests {args...}").run_echo()?;
 
   // wasm32: typewire + examples.
-  let wasm = "wasm32-unknown-unknown";
-  cmd!(sh, "cargo clippy -p typewire -p todo-app --target {wasm} {args...}").run_echo()?;
+  cmd!(sh, "cargo clippy -p typewire -p todo-app --target {WASM_TARGET} {args...}").run_echo()?;
 
   fmt(sh, !fix)
+}
+
+fn test(sh: &Shell) -> Result<()> {
+  // Native tests.
+  cmd!(sh, "cargo test --all").run_echo()?;
+
+  // Schema roundtrip tests (need typescript feature, separate to avoid feature conflict).
+  cmd!(sh, "cargo test -p typewire-schema --features typescript").run_echo()?;
+
+  // Wasm tests.
+  cmd!(sh, "cargo test -p typewire --target {WASM_TARGET}").run_echo()?;
+
+  // E2E: build wasm → generate TypeScript → diff snapshot → JS runtime test.
+  cmd!(sh, "cargo build -p todo-app --target {WASM_TARGET} --release").run_echo()?;
+
+  cmd!(
+    sh,
+    "cargo run -p typewire --features cli -- target/{WASM_TARGET}/release/todo_app.wasm --no-strip -o examples/todo-app/types.gen.d.ts"
+  )
+  .run_echo()?;
+
+  cmd!(sh, "diff examples/todo-app/types.d.ts examples/todo-app/types.gen.d.ts").run_echo()?;
+
+  cmd!(
+    sh,
+    "wasm-bindgen target/{WASM_TARGET}/release/todo_app.wasm --out-dir examples/todo-app/pkg --target nodejs --no-typescript"
+  )
+  .run_echo()?;
+
+  cmd!(sh, "node examples/todo-app/test.mjs").run_echo()?;
+
+  Ok(())
 }
