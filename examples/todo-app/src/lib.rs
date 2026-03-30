@@ -1,3 +1,5 @@
+#![cfg(target_arch = "wasm32")]
+
 use typewire::Typewire;
 use wasm_bindgen::prelude::*;
 
@@ -17,7 +19,7 @@ pub struct Todo {
   pub tags: Vec<String>,
 }
 
-#[derive(Clone, PartialEq, Typewire)]
+#[derive(Clone, PartialEq, Eq, Typewire)]
 #[serde(rename_all = "lowercase")]
 pub enum Priority {
   Low,
@@ -49,12 +51,22 @@ pub struct TodoList {
 // Exported wasm functions using the derived Typewire conversions
 // ---------------------------------------------------------------------------
 
+/// Round-trip a JS object through the `Todo` type.
+///
+/// # Errors
+///
+/// Returns an error if the value is not a valid `Todo`.
 #[wasm_bindgen]
 pub fn create_todo(value: JsValue) -> Result<JsValue, JsValue> {
   let todo = Todo::from_js(value).map_err(|e| JsValue::from_str(&e.to_string()))?;
   Ok(todo.to_js())
 }
 
+/// Apply a `Command` to a `TodoList` and return the updated list.
+///
+/// # Errors
+///
+/// Returns an error if the inputs are not valid `TodoList`/`Command`.
 #[wasm_bindgen]
 pub fn apply_command(list: JsValue, cmd: JsValue) -> Result<JsValue, JsValue> {
   let mut todo_list = TodoList::from_js(list).map_err(|e| JsValue::from_str(&e.to_string()))?;

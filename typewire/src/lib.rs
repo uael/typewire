@@ -42,6 +42,12 @@ pub trait Typewire: Sized {
   #[cfg(target_arch = "wasm32")]
   fn to_js(&self) -> wasm_bindgen::JsValue;
 
+  /// Converts a JavaScript value into this Rust type.
+  ///
+  /// # Errors
+  ///
+  /// Returns an [`Error`] if the JS value cannot be converted (e.g. wrong
+  /// type or out-of-range value).
   #[cfg(target_arch = "wasm32")]
   fn from_js(value: wasm_bindgen::JsValue) -> Result<Self, Error>;
 
@@ -50,6 +56,11 @@ pub trait Typewire: Sized {
   /// The default delegates to `from_js`. Collection types (`Vec`, `Option`,
   /// maps) override this to skip invalid elements / default to `None`
   /// instead of propagating errors, logging warnings for each skip.
+  ///
+  /// # Errors
+  ///
+  /// Returns an [`Error`] if the JS value cannot be converted and the type
+  /// does not support lenient fallback.
   #[cfg(target_arch = "wasm32")]
   fn from_js_lenient(value: wasm_bindgen::JsValue, _field: &str) -> Result<Self, Error> {
     Self::from_js(value)
@@ -97,13 +108,29 @@ mod wasm {
   use wasm_bindgen::JsValue;
 
   /// Returns `true` if the value is `null` or `undefined`.
-  pub(crate) fn is_nullish(v: &JsValue) -> bool {
+  pub fn is_nullish(v: &JsValue) -> bool {
     v.is_null() || v.is_undefined()
   }
 
   /// Extract an `f64` from a JS number value.
-  pub(crate) fn as_safe_f64(v: &JsValue) -> Option<f64> {
+  pub fn as_safe_f64(v: &JsValue) -> Option<f64> {
     v.as_f64()
+  }
+
+  /// Lossless `usize` → `u32` on wasm32 (where `usize` is 32-bit).
+  #[expect(clippy::cast_possible_truncation, reason = "wasm32: usize == u32")]
+  pub const fn as_u32(n: usize) -> u32 {
+    n as u32
+  }
+
+  /// `isize` → `u32` on wasm32 (for non-negative index arithmetic).
+  #[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "wasm32: isize is i32, values are non-negative indices"
+  )]
+  pub const fn isize_as_u32(n: isize) -> u32 {
+    n as u32
   }
 }
 
@@ -120,7 +147,7 @@ impl Typewire for wasm_bindgen::JsValue {
     Ok(value)
   }
 
-  fn patch_js(&self, old: &wasm_bindgen::JsValue, set: impl FnOnce(wasm_bindgen::JsValue)) {
+  fn patch_js(&self, old: &wasm_bindgen::JsValue, set: impl FnOnce(Self)) {
     if old != self {
       set(self.clone());
     }
@@ -166,10 +193,10 @@ macro_rules! impl_typewire_small_int {
                     .ok_or(Error::UnexpectedType { expected: "number" })?;
                 #[expect(
                     clippy::cast_possible_truncation,
-                    reason = "checked by range comparison below"
+                    reason = "checked by round-trip comparison below"
                 )]
                 let v = n as $ty;
-                if f64::from(v) == n {
+                if f64::from(v).to_bits() == n.to_bits() {
                     Ok(v)
                 } else {
                     Err(Error::OutOfRange)
@@ -184,7 +211,47 @@ macro_rules! impl_typewire_small_int {
     )*};
 }
 
-impl_typewire_small_int!(u8, u16, u32, i8, i16, i32);
+impl_typewire_small_int!(i8, i16, i32);
+
+macro_rules! impl_typewire_small_uint {
+    ($($ty:ident),*) => {$(
+        impl Typewire for $ty {
+            type Ident = schema::coded::PrimitiveIdent;
+            const IDENT: Self::Ident = schema::coded::PrimitiveIdent::new(
+                schema::Scalar::$ty,
+            );
+
+            #[cfg(target_arch = "wasm32")]
+            fn to_js(&self) -> wasm_bindgen::JsValue {
+                wasm_bindgen::JsValue::from_f64(f64::from(*self))
+            }
+
+            #[cfg(target_arch = "wasm32")]
+            fn from_js(value: wasm_bindgen::JsValue) -> Result<Self, Error> {
+                let n = wasm::as_safe_f64(&value)
+                    .ok_or(Error::UnexpectedType { expected: "number" })?;
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss,
+                    reason = "checked by round-trip comparison below"
+                )]
+                let v = n as $ty;
+                if f64::from(v).to_bits() == n.to_bits() {
+                    Ok(v)
+                } else {
+                    Err(Error::OutOfRange)
+                }
+            }
+
+            #[cfg(target_arch = "wasm32")]
+            fn patch_js(&self, old: &wasm_bindgen::JsValue, set: impl FnOnce(wasm_bindgen::JsValue)) {
+                patch_js_atomic(self, old, set);
+            }
+        }
+    )*};
+}
+
+impl_typewire_small_uint!(u8, u16, u32);
 
 impl Typewire for f32 {
   type Ident = schema::coded::PrimitiveIdent;
@@ -199,7 +266,7 @@ impl Typewire for f32 {
   fn from_js(value: wasm_bindgen::JsValue) -> Result<Self, Error> {
     let n = wasm::as_safe_f64(&value).ok_or(Error::UnexpectedType { expected: "number" })?;
     #[expect(clippy::cast_possible_truncation, reason = "f64 → f32 narrowing is intentional")]
-    Ok(n as f32)
+    Ok(n as Self)
   }
 
   #[cfg(target_arch = "wasm32")]
@@ -229,7 +296,11 @@ impl Typewire for f64 {
 }
 
 macro_rules! impl_typewire_lossy {
-    ($($ty:ident),*) => {$(
+    (unsigned: $($uty:ident),*; signed: $($sty:ident),*) => {
+        $(impl_typewire_lossy!(@impl $uty, cast_possible_truncation, cast_sign_loss);)*
+        $(impl_typewire_lossy!(@impl $sty, cast_possible_truncation);)*
+    };
+    (@impl $ty:ident, $($lint:ident),+) => {
         impl Typewire for $ty {
             type Ident = schema::coded::PrimitiveIdent;
             const IDENT: Self::Ident = schema::coded::PrimitiveIdent::new(
@@ -238,8 +309,17 @@ macro_rules! impl_typewire_lossy {
 
             #[cfg(target_arch = "wasm32")]
             fn to_js(&self) -> wasm_bindgen::JsValue {
+                #[expect(
+                    clippy::cast_precision_loss,
+                    reason = "JS numbers are f64 — precision loss is inherent"
+                )]
                 let number = *self as f64;
-                if number as $ty != *self {
+                #[expect(
+                    $(clippy::$lint,)+
+                    reason = "round-trip check detects precision loss"
+                )]
+                let roundtrip = number as $ty;
+                if roundtrip != *self {
                     log::warn!("lossy conversion of {self} to JS number: {number}");
                 }
 
@@ -252,8 +332,7 @@ macro_rules! impl_typewire_lossy {
 
                 if let Some(number) = wasm::as_safe_f64(&value) {
                     #[expect(
-                        clippy::cast_possible_truncation,
-                        clippy::cast_sign_loss,
+                        $(clippy::$lint,)+
                         reason = "lossy conversion is intentional — saturates for out-of-range values"
                     )]
                     return Ok(number as $ty);
@@ -270,10 +349,10 @@ macro_rules! impl_typewire_lossy {
                 patch_js_atomic(self, old, set);
             }
         }
-    )*};
+    };
 }
 
-impl_typewire_lossy!(u64, i64, u128, i128);
+impl_typewire_lossy!(unsigned: u64, u128; signed: i64, i128);
 
 impl Typewire for usize {
   type Ident = schema::coded::PrimitiveIdent;
@@ -281,8 +360,13 @@ impl Typewire for usize {
 
   #[cfg(target_arch = "wasm32")]
   fn to_js(&self) -> wasm_bindgen::JsValue {
-    // On wasm32, usize is u32 — fits in f64.
-    wasm_bindgen::JsValue::from_f64(*self as f64)
+    // On wasm32, usize is u32 — fits in f64 without precision loss.
+    #[expect(
+      clippy::cast_precision_loss,
+      reason = "on wasm32 usize is u32, which fits exactly in f64"
+    )]
+    let n = *self as f64;
+    wasm_bindgen::JsValue::from_f64(n)
   }
 
   #[cfg(target_arch = "wasm32")]
@@ -293,7 +377,7 @@ impl Typewire for usize {
       clippy::cast_sign_loss,
       reason = "on wasm32, usize == u32, validated by round-trip"
     )]
-    Ok(n as usize)
+    Ok(n as Self)
   }
 
   #[cfg(target_arch = "wasm32")]
@@ -308,7 +392,13 @@ impl Typewire for isize {
 
   #[cfg(target_arch = "wasm32")]
   fn to_js(&self) -> wasm_bindgen::JsValue {
-    wasm_bindgen::JsValue::from_f64(*self as f64)
+    // On wasm32, isize is i32 — fits in f64 without precision loss.
+    #[expect(
+      clippy::cast_precision_loss,
+      reason = "on wasm32 isize is i32, which fits exactly in f64"
+    )]
+    let n = *self as f64;
+    wasm_bindgen::JsValue::from_f64(n)
   }
 
   #[cfg(target_arch = "wasm32")]
@@ -318,7 +408,7 @@ impl Typewire for isize {
       clippy::cast_possible_truncation,
       reason = "on wasm32, isize == i32, validated by round-trip"
     )]
-    Ok(n as isize)
+    Ok(n as Self)
   }
 
   #[cfg(target_arch = "wasm32")]
@@ -432,10 +522,7 @@ impl<T: Typewire> Typewire for Option<T> {
 
   #[cfg(target_arch = "wasm32")]
   fn to_js(&self) -> wasm_bindgen::JsValue {
-    match self {
-      Some(v) => v.to_js(),
-      None => wasm_bindgen::JsValue::NULL,
-    }
+    self.as_ref().map_or(wasm_bindgen::JsValue::NULL, Typewire::to_js)
   }
 
   #[cfg(target_arch = "wasm32")]
@@ -481,7 +568,7 @@ impl<T: Typewire> Typewire for Option<T> {
 pub fn array_ref<'a, T: Typewire + 'a>(
   iter: impl IntoIterator<Item = &'a T>,
 ) -> wasm_bindgen::JsValue {
-  array(iter.into_iter().map(|item| item.to_js()))
+  array(iter.into_iter().map(Typewire::to_js))
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -490,9 +577,9 @@ pub fn array<T: Typewire>(iter: impl IntoIterator<Item = T>) -> wasm_bindgen::Js
   let (low, high) = iter.size_hint();
   let arr;
   if Some(low) == high {
-    arr = js_sys::Array::new_with_length(low as u32);
+    arr = js_sys::Array::new_with_length(wasm::as_u32(low));
     for (i, item) in iter.enumerate() {
-      arr.set(i as u32, item.to_js());
+      arr.set(wasm::as_u32(i), item.to_js());
     }
   } else {
     arr = js_sys::Array::new();
@@ -514,9 +601,8 @@ impl<T: Typewire> Typewire for Vec<T> {
 
   #[cfg(target_arch = "wasm32")]
   fn from_js(value: wasm_bindgen::JsValue) -> Result<Self, Error> {
-    let arr: js_sys::Array =
-      value.try_into().map_err(|_| Error::UnexpectedType { expected: "array" })?;
-    let mut out = Vec::with_capacity(arr.length() as usize);
+    let arr: js_sys::Array = value.into();
+    let mut out = Self::with_capacity(arr.length() as usize);
     for i in 0..arr.length() {
       out.push(T::from_js(arr.get(i))?);
     }
@@ -529,9 +615,9 @@ impl<T: Typewire> Typewire for Vec<T> {
 
     let Some(arr) = value.dyn_ref::<js_sys::Array>() else {
       log::warn!("{field}: expected array, skipping (got {:?})", value.js_typeof());
-      return Ok(Vec::new());
+      return Ok(Self::new());
     };
-    let mut out = Vec::with_capacity(arr.length() as usize);
+    let mut out = Self::with_capacity(arr.length() as usize);
     for i in 0..arr.length() {
       match T::from_js(arr.get(i)) {
         Ok(v) => out.push(v),
@@ -547,38 +633,16 @@ impl<T: Typewire> Typewire for Vec<T> {
   }
 }
 
-#[cfg(target_arch = "wasm32")]
-pub fn patch_js_slice<'a, T: Typewire + 'a>(
-  new: impl ExactSizeIterator<Item = &'a T> + Clone,
-  old: &wasm_bindgen::JsValue,
-  set: impl FnOnce(wasm_bindgen::JsValue),
-) {
-  #[cfg(debug_assertions)]
-  let old_old = old.clone();
-  if !patch_js_slice_inner(new.clone(), old, set) {
-    return;
-  }
-  #[cfg(debug_assertions)]
-  {
-    let new_native = <Vec<T>>::from_js(old.clone()).unwrap();
-    let new = new.map(Typewire::to_js).collect::<Vec<_>>();
-    assert_eq!(new_native.len(), new.len());
-    if &old_old != old {
-      log::warn!("~~ patch_js_slice: target = {new:#?}, old = {old_old:#?} new = {old:#?}");
-    }
-  }
-}
-
 /// LCS-based slice patching with `T::patch_js` delegation.
 ///
 /// Builds a patched `JsValue` array by calling `T::patch_js` on each element
 /// positionally. Unchanged elements keep the same JS reference as the old array.
-/// Then uses `similar`'s LCS algorithm on the JsValue references (`===`) to
+/// Then uses `similar`'s LCS algorithm on the `JsValue` references (`===`) to
 /// compute minimal splice operations.
 ///
 /// Does NOT require `T: PartialEq` — comparison uses JS reference identity.
 #[cfg(target_arch = "wasm32")]
-pub fn patch_js_slice_inner<'a, T: Typewire + 'a>(
+pub fn patch_js_slice<'a, T: Typewire + 'a>(
   new: impl ExactSizeIterator<Item = &'a T> + Clone,
   old: &wasm_bindgen::JsValue,
   set: impl FnOnce(wasm_bindgen::JsValue),
@@ -597,19 +661,21 @@ pub fn patch_js_slice_inner<'a, T: Typewire + 'a>(
   // Fast path: same length
   if old_len == new_len {
     for (i, elem) in new.enumerate() {
-      elem.patch_js(&arr.get(i as u32), |val| arr.set(i as u32, val));
+      let idx = wasm::as_u32(i);
+      elem.patch_js(&arr.get(idx), |val| arr.set(idx, val));
     }
     return false;
   }
 
   // Collect old JS references
-  let old_refs: Vec<wasm_bindgen::JsValue> = (0..old_len).map(|i| arr.get(i as u32)).collect();
+  let old_refs: Vec<wasm_bindgen::JsValue> =
+    (0..old_len).map(|i| arr.get(wasm::as_u32(i))).collect();
 
   // Build patched refs: for each new element, try patch_js against the
   // positionally corresponding old element. If unchanged, the old ref is kept.
   // If changed or new, we get a fresh JsValue.
   let mut patched_refs: Vec<wasm_bindgen::JsValue> = Vec::with_capacity(new_len);
-  for (i, elem) in new.clone().enumerate() {
+  for (i, elem) in new.enumerate() {
     if i < old_len {
       let mut result = old_refs[i].clone();
       elem.patch_js(&old_refs[i], |v| result = v);
@@ -629,11 +695,7 @@ pub fn patch_js_slice_inner<'a, T: Typewire + 'a>(
 
   let mut offset: isize = 0;
 
-  #[expect(
-    clippy::cast_sign_loss,
-    clippy::cast_possible_wrap,
-    reason = "matches difficient's implementation"
-  )]
+  #[expect(clippy::cast_possible_wrap, reason = "wasm32 array indices fit in isize")]
   for op in ops {
     match op {
       similar::DiffOp::Equal { old_index, new_index, len } => {
@@ -641,30 +703,30 @@ pub fn patch_js_slice_inner<'a, T: Typewire + 'a>(
         // during patched_refs construction, but we need to update the
         // actual array if the position shifted due to prior splices)
         for ix in 0..len {
-          let target_idx = (new_index + ix) as u32;
-          let actual_idx = ((old_index + ix) as isize + offset) as u32;
-          if actual_idx != target_idx {
-            // Position shifted — move element
-            arr.set(target_idx, patched_refs[new_index + ix].clone());
-          } else {
+          let target_idx = wasm::as_u32(new_index + ix);
+          let actual_idx = wasm::isize_as_u32((old_index + ix) as isize + offset);
+          if actual_idx == target_idx {
             // Same position — the value is already patched_refs[i]
             // which may have been updated by patch_js
             arr.set(actual_idx, patched_refs[new_index + ix].clone());
+          } else {
+            // Position shifted — move element
+            arr.set(target_idx, patched_refs[new_index + ix].clone());
           }
         }
       }
       similar::DiffOp::Delete { old_len, old_index, .. } => {
-        let at = (old_index as isize + offset) as u32;
-        arr.splice_many(at, old_len as u32, &[]);
+        let at = wasm::isize_as_u32(old_index as isize + offset);
+        arr.splice_many(at, wasm::as_u32(old_len), &[]);
         offset -= old_len as isize;
       }
       similar::DiffOp::Insert { new_index, new_len, .. } => {
-        arr.splice_many(new_index as u32, 0, &patched_refs[new_index..new_index + new_len]);
+        arr.splice_many(wasm::as_u32(new_index), 0, &patched_refs[new_index..new_index + new_len]);
         offset += new_len as isize;
       }
       similar::DiffOp::Replace { old_index, old_len, new_index, new_len, .. } => {
-        let at = (old_index as isize + offset) as u32;
-        arr.splice_many(at, old_len as u32, &patched_refs[new_index..new_index + new_len]);
+        let at = wasm::isize_as_u32(old_index as isize + offset);
+        arr.splice_many(at, wasm::as_u32(old_len), &patched_refs[new_index..new_index + new_len]);
         offset -= old_len as isize;
         offset += new_len as isize;
       }
@@ -685,7 +747,7 @@ impl<T: Typewire> Typewire for Box<T> {
 
   #[cfg(target_arch = "wasm32")]
   fn from_js(value: wasm_bindgen::JsValue) -> Result<Self, Error> {
-    T::from_js(value).map(Box::new)
+    T::from_js(value).map(Self::new)
   }
 
   #[cfg(target_arch = "wasm32")]
@@ -700,33 +762,35 @@ impl<T: Typewire, const N: usize> Typewire for [T; N] {
 
   #[cfg(target_arch = "wasm32")]
   fn to_js(&self) -> wasm_bindgen::JsValue {
-    let arr = js_sys::Array::new_with_length(N as u32);
+    let arr = js_sys::Array::new_with_length(wasm::as_u32(N));
     for (i, item) in self.iter().enumerate() {
-      arr.set(i as u32, item.to_js());
+      arr.set(wasm::as_u32(i), item.to_js());
     }
     arr.into()
   }
 
   #[cfg(target_arch = "wasm32")]
   fn from_js(value: wasm_bindgen::JsValue) -> Result<Self, Error> {
-    let arr: js_sys::Array =
-      value.try_into().map_err(|_| Error::UnexpectedType { expected: "array" })?;
+    let arr: js_sys::Array = value.into();
     if arr.length() as usize != N {
       return Err(Error::InvalidValue {
         message: format!("expected array of length {N}, got {}", arr.length()),
       });
     }
-    // Use MaybeUninit to build the array element-by-element.
+    // SAFETY: `MaybeUninit<T>` does not require initialisation, so an array
+    // of `MaybeUninit` values is valid even when uninitialised.
     let mut out: [std::mem::MaybeUninit<T>; N] =
       unsafe { std::mem::MaybeUninit::uninit().assume_init() };
     for (i, slot) in out.iter_mut().enumerate() {
-      match T::from_js(arr.get(i as u32)) {
+      match T::from_js(arr.get(wasm::as_u32(i))) {
         Ok(v) => {
           slot.write(v);
         }
         Err(e) => {
           // Drop already-initialized elements before returning.
           for already in &mut out[..i] {
+            // SAFETY: elements at indices `0..i` have been initialised by
+            // previous loop iterations.
             unsafe { already.assume_init_drop() };
           }
           return Err(e);
@@ -744,9 +808,9 @@ impl<T: Typewire, const N: usize> Typewire for [T; N] {
       set(self.to_js());
       return;
     };
-    for i in 0..N {
-      let idx = i as u32;
-      self[i].patch_js(&arr.get(idx), |v| arr.set(idx, v));
+    for (i, elem) in self.iter().enumerate() {
+      let idx = wasm::as_u32(i);
+      elem.patch_js(&arr.get(idx), |v| arr.set(idx, v));
     }
   }
 }
@@ -819,7 +883,7 @@ impl<K: Typewire + Eq + core::hash::Hash, V: Typewire, S: ::std::hash::BuildHash
     let entries = js_sys::Object::entries(
       value.dyn_ref::<js_sys::Object>().ok_or(Error::UnexpectedType { expected: "object" })?,
     );
-    let mut map = std::collections::HashMap::default();
+    let mut map = Self::default();
     map.reserve(entries.length() as usize);
     for i in 0..entries.length() {
       let pair: js_sys::Array = entries.get(i).into();
@@ -838,7 +902,7 @@ impl<K: Typewire + Eq + core::hash::Hash, V: Typewire, S: ::std::hash::BuildHash
       return Ok(Self::default());
     };
     let entries = js_sys::Object::entries(obj);
-    let mut map = std::collections::HashMap::default();
+    let mut map = Self::default();
     map.reserve(entries.length() as usize);
     for i in 0..entries.length() {
       let pair: js_sys::Array = entries.get(i).into();
@@ -885,7 +949,7 @@ impl<K: Typewire + Ord, V: Typewire> Typewire for std::collections::BTreeMap<K, 
     let entries = js_sys::Object::entries(
       value.dyn_ref::<js_sys::Object>().ok_or(Error::UnexpectedType { expected: "object" })?,
     );
-    let mut map = std::collections::BTreeMap::new();
+    let mut map = Self::new();
     for i in 0..entries.length() {
       let pair: js_sys::Array =
         entries.get(i).dyn_into().map_err(|_| Error::UnexpectedType { expected: "array" })?;
@@ -904,14 +968,13 @@ impl<K: Typewire + Ord, V: Typewire> Typewire for std::collections::BTreeMap<K, 
       return Ok(Self::default());
     };
     let entries = js_sys::Object::entries(obj);
-    let mut map = std::collections::BTreeMap::new();
+    let mut map = Self::new();
     for i in 0..entries.length() {
-      let pair: js_sys::Array = match entries.get(i).dyn_into() {
-        Ok(a) => a,
-        Err(_) => {
-          log::warn!("{field}: skipping entry {i}: not an array");
-          continue;
-        }
+      let pair: js_sys::Array = if let Ok(a) = entries.get(i).dyn_into() {
+        a
+      } else {
+        log::warn!("{field}: skipping entry {i}: not an array");
+        continue;
       };
       match (K::from_js(pair.get(0)), V::from_js(pair.get(1))) {
         (Ok(k), Ok(v)) => {

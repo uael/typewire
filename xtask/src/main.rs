@@ -85,5 +85,9 @@ fn lint(sh: &Shell, fix: bool) -> Result<()> {
   // typewire-derive.
   cmd!(sh, "cargo clippy -p typewire-derive --tests {args...}").run_echo()?;
 
+  // wasm32: typewire + examples.
+  let wasm = "wasm32-unknown-unknown";
+  cmd!(sh, "cargo clippy -p typewire -p todo-app --target {wasm} {args...}").run_echo()?;
+
   fmt(sh, !fix)
 }

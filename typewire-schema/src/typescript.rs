@@ -102,7 +102,14 @@ fn emit_enum(e: &Enum, out: &mut String) {
     members.push(member);
   }
 
-  let _ = writeln!(out, "export type {} = {};\n", e.ident, members.join(" | "));
+  let _ = writeln!(out, "export type {} =", e.ident);
+  for (i, member) in members.iter().enumerate() {
+    if i + 1 < members.len() {
+      let _ = writeln!(out, "  | {member}");
+    } else {
+      let _ = writeln!(out, "  | {member};\n");
+    }
+  }
 }
 
 fn emit_ext_tagged_variant(v: &Variant) -> String {
