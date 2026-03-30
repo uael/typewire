@@ -1,7 +1,7 @@
 use std::{path::PathBuf, sync::LazyLock};
 
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use xshell::{Shell, cmd};
 
 #[derive(Parser)]
@@ -27,8 +27,22 @@ enum Command {
     #[arg(long)]
     fix: bool,
   },
-  /// Run all tests (native, wasm32, schema roundtrips, e2e)
-  Test,
+  /// Run tests
+  Test {
+    /// Which test suite to run (default: all)
+    #[arg(value_enum)]
+    suite: Option<TestSuite>,
+  },
+}
+
+#[derive(Clone, ValueEnum)]
+enum TestSuite {
+  /// Native unit + integration tests
+  Unit,
+  /// wasm32 tests (requires wasm-bindgen-cli)
+  Wasm,
+  /// End-to-end: build wasm → typegen → tsc → node
+  E2e,
 }
 
 /// Project root directory.
@@ -47,7 +61,16 @@ fn main() -> Result<()> {
   match cli.command {
     Command::Fmt { check } => fmt(&sh, check),
     Command::Lint { fix } => lint(&sh, fix),
-    Command::Test => test(&mut sh),
+    Command::Test { suite } => match suite {
+      Some(TestSuite::Unit) => test_unit(&sh),
+      Some(TestSuite::Wasm) => test_wasm(&sh),
+      Some(TestSuite::E2e) => test_e2e(&mut sh),
+      None => {
+        test_unit(&sh)?;
+        test_wasm(&sh)?;
+        test_e2e(&mut sh)
+      }
+    },
   }
 }
 
@@ -96,34 +119,43 @@ fn lint(sh: &Shell, fix: bool) -> Result<()> {
   fmt(sh, !fix)
 }
 
-fn test(sh: &mut Shell) -> Result<()> {
-  // Native tests.
+// ---------------------------------------------------------------------------
+// Test suites
+// ---------------------------------------------------------------------------
+
+fn test_unit(sh: &Shell) -> Result<()> {
   cmd!(sh, "cargo test --all").run_echo()?;
-
-  // Schema roundtrip tests (need typescript feature, separate to avoid feature conflict).
+  // Schema roundtrip tests need the typescript feature (separate build to avoid
+  // encode+decode feature conflict).
   cmd!(sh, "cargo test -p typewire-schema --features typescript").run_echo()?;
+  Ok(())
+}
 
-  // Wasm tests.
+fn test_wasm(sh: &Shell) -> Result<()> {
   cmd!(sh, "cargo test -p typewire --target {WASM_TARGET}").run_echo()?;
+  Ok(())
+}
 
-  // E2E: build wasm → generate TypeScript → diff snapshot → JS runtime test.
+fn test_e2e(sh: &mut Shell) -> Result<()> {
+  // Build wasm.
   cmd!(sh, "cargo build -p todo-app --target {WASM_TARGET} --release").run_echo()?;
 
+  // Generate TypeScript and diff against checked-in snapshot.
   cmd!(
     sh,
     "cargo run -p typewire --features cli -- target/{WASM_TARGET}/release/todo_app.wasm --no-strip -o examples/todo-app/types.gen.d.ts"
   )
   .run_echo()?;
-
   cmd!(sh, "diff examples/todo-app/types.d.ts examples/todo-app/types.gen.d.ts").run_echo()?;
 
+  // Generate JS bindings.
   cmd!(
     sh,
     "wasm-bindgen target/{WASM_TARGET}/release/todo_app.wasm --out-dir examples/todo-app/pkg --target nodejs"
   )
   .run_echo()?;
 
-  // Type-check and run the test against the generated types.
+  // Type-check and run.
   sh.set_current_dir(ROOT.join("examples/todo-app"));
   cmd!(sh, "npm install --prefer-offline").run_echo()?;
   cmd!(sh, "npx tsc --noEmit").run_echo()?;

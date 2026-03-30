@@ -9,14 +9,14 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  test:
-    name: Test
+  test-unit:
+    name: Test (unit)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --all
+      - run: cargo xtask test unit
 
   test-wasm:
     name: Test (wasm32)
@@ -29,10 +29,10 @@ jobs:
       - uses: cargo-bins/cargo-binstall@main
       - run: cargo binstall --no-confirm wasm-bindgen-cli
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test -p typewire --target wasm32-unknown-unknown
+      - run: cargo xtask test wasm
 
-  e2e:
-    name: End-to-end
+  test-e2e:
+    name: Test (e2e)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,18 +42,7 @@ jobs:
       - uses: cargo-bins/cargo-binstall@main
       - run: cargo binstall --no-confirm wasm-bindgen-cli
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build -p todo-app --target wasm32-unknown-unknown --release
-      - name: TypeScript snapshot
-        run: |
-          cargo run -p typewire --features cli -- target/wasm32-unknown-unknown/release/todo_app.wasm --no-strip -o examples/todo-app/types.gen.d.ts
-          diff examples/todo-app/types.d.ts examples/todo-app/types.gen.d.ts
-      - name: Type-check and run
-        run: |
-          wasm-bindgen target/wasm32-unknown-unknown/release/todo_app.wasm --out-dir examples/todo-app/pkg --target nodejs
-          cd examples/todo-app
-          npm install --prefer-offline
-          npx tsc --noEmit
-          npx tsx test.ts
+      - run: cargo xtask test e2e
 
   lint:
     name: Lint
@@ -63,6 +52,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+          targets: wasm32-unknown-unknown
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt

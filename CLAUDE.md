@@ -6,12 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```sh
 cargo build                          # Build all crates
-cargo test                           # Run all tests
+cargo xtask test                     # Run all tests (unit + wasm + e2e)
+cargo xtask test unit                # Native unit + integration + schema roundtrips
+cargo xtask test wasm                # wasm32 tests (needs wasm-bindgen-cli)
+cargo xtask test e2e                 # Build wasm → typegen → tsc → node
 cargo xtask fmt                      # Format code (requires nightly rustfmt)
 cargo xtask fmt --check              # Check formatting
 cargo xtask lint                     # Clippy + format check (-D warnings)
 cargo xtask lint --fix               # Auto-fix clippy + formatting
-cargo doc --no-deps --all --all-features  # Build documentation (-D warnings in CI)
+cargo doc --no-deps --all            # Build documentation (-D warnings in CI)
 cargo deny check                     # License/advisory/ban auditing
 ```
 
