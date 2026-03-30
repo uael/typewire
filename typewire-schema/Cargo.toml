@@ -12,9 +12,9 @@ readme = "../README.md"
 
 [features]
 default = []
-syn = ["dep:syn", "dep:quote", "dep:proc-macro2"]
-codegen = ["dep:thiserror"]
-typescript = ["codegen"]
+encode = ["dep:syn", "dep:quote", "dep:proc-macro2"]
+decode = ["dep:thiserror"]
+typescript = ["decode"]
 
 [dependencies]
 bitflags = "2"

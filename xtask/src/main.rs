@@ -57,19 +57,19 @@ fn lint(sh: &Shell, fix: bool) -> Result<()> {
   let args =
     if fix { ["--fix", "--allow-dirty", "--allow-staged"] } else { ["--", "-D", "warnings"] };
 
-  // typewire-schema's `syn` and `codegen` features are mutually exclusive,
+  // typewire-schema's `encode` and `decode` features are mutually exclusive,
   // so we lint each meaningful feature combination separately.
 
-  // Workspace with default features (typewire[derive], typewire-schema[syn]).
+  // Workspace with default features (typewire[derive], typewire-schema[encode]).
   cmd!(sh, "cargo clippy --tests {args...}").run_echo()?;
 
   // typewire-schema: no features (coded only).
   cmd!(sh, "cargo clippy -p typewire-schema --tests --no-default-features {args...}").run_echo()?;
 
-  // typewire-schema: syn path (encode).
-  cmd!(sh, "cargo clippy -p typewire-schema --tests --features syn {args...}").run_echo()?;
+  // typewire-schema: encode path.
+  cmd!(sh, "cargo clippy -p typewire-schema --tests --features encode {args...}").run_echo()?;
 
-  // typewire-schema: typescript path (decode + codegen, no syn).
+  // typewire-schema: typescript path (decode, no encode).
   cmd!(sh, "cargo clippy -p typewire-schema --tests --features typescript {args...}").run_echo()?;
 
   // typewire: no features (no derive, no optional deps).

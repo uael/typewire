@@ -8,18 +8,18 @@
 //! │ syn::Schema  │      │  coded::*     │     │  Schema       │
 //! │ (derive-time)│─encode─▶ (link section)─decode─▶ (codegen) │
 //! └──────────────┘      └───────────────┘     └───────────────┘
-//!   feature="syn"        always available      feature="codegen"
+//!   feature="encode"      always available      feature="decode"
 //! ```
 //!
-//! 1. **`syn`** — The derive macro analyzes Rust types into [`Schema`] values
-//!    with `syn` AST types, then the [`encode`] module serializes them as
+//! 1. **`encode`** — The derive macro analyzes Rust types into [`Schema`] values
+//!    with `syn` AST types, then the `encode` module serializes them as
 //!    flat [`coded::Record<T>`](coded::Record) statics embedded in link sections.
 //!
 //! 2. **`coded`** — The binary format. Always available. `#[repr(C, packed)]`,
 //!    `Copy`, const-constructible types that linkers concatenate into a single
 //!    `typewire_schemas` section.
 //!
-//! 3. **`codegen`** — The `decode` module reads link-section bytes back into
+//! 3. **`decode`** — The `decode` module reads link-section bytes back into
 //!    [`Schema`] values with owned data. Language-specific emitters (e.g.
 //!    `typescript`) consume these to generate bindings.
 //!
@@ -28,8 +28,8 @@
 //! | Module | Feature | Purpose |
 //! |--------|---------|---------|
 //! | [`coded`] | *(always)* | Binary format types for link-section embedding |
-//! | `encode` | `syn` | `Schema` → `TokenStream` (link-section record construction) |
-//! | `decode` | `codegen` | Link-section bytes → `Schema` |
+//! | `encode` | `encode` | `Schema` → `TokenStream` (link-section record construction) |
+//! | `decode` | `decode` | Link-section bytes → `Schema` |
 //! | `typescript` | `typescript` | `Schema` → `.d.ts` declarations |
 
 mod scalar;
@@ -38,11 +38,11 @@ mod scalar;
 pub mod coded;
 
 /// Encoder: [`Schema`] → [`coded::Record<T>`](coded::Record) TokenStream.
-#[cfg(feature = "syn")]
+#[cfg(feature = "encode")]
 pub mod encode;
 
 /// Decoder: link-section bytes → [`Schema`] with owned data.
-#[cfg(feature = "codegen")]
+#[cfg(feature = "decode")]
 pub mod decode;
 
 /// TypeScript declaration emitter.
@@ -53,10 +53,10 @@ use bitflags::bitflags;
 pub use scalar::Scalar;
 
 // ---------------------------------------------------------------------------
-// Syn repr — for derive codegen (feature = "syn")
+// Syn repr — for derive codegen (feature = "encode")
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "syn")]
+#[cfg(feature = "encode")]
 pub mod repr {
   pub type Ident = ::syn::Ident;
   pub type Str = String;
@@ -68,10 +68,10 @@ pub mod repr {
 }
 
 // ---------------------------------------------------------------------------
-// Owned repr — for decoding and codegen (feature = "codegen", not "syn")
+// Owned repr — for decoding and codegen (feature = "decode", not "encode")
 // ---------------------------------------------------------------------------
 
-#[cfg(all(feature = "codegen", not(feature = "syn")))]
+#[cfg(all(feature = "decode", not(feature = "encode")))]
 pub mod repr {
   pub type Ident = String;
   pub type Str = String;
@@ -121,41 +121,41 @@ bitflags! {
 }
 
 // ---------------------------------------------------------------------------
-// Schema — the type metadata used by both syn and codegen stages
+// Schema — the type metadata used by both encode and decode stages
 // ---------------------------------------------------------------------------
 
 /// The root schema node for a type.
 ///
-/// With `feature = "syn"` (derive-time): 5 definition variants using syn AST types.
-/// With `feature = "codegen"` (decode-time): 5 definition variants + 8 type-reference
+/// With `feature = "encode"` (derive-time): 5 definition variants using syn AST types.
+/// With `feature = "decode"` (decode-time): 5 definition variants + 8 type-reference
 /// variants, all using owned data.
-#[cfg(any(feature = "syn", feature = "codegen"))]
+#[cfg(any(feature = "encode", feature = "decode"))]
 #[derive(Clone)]
-#[cfg_attr(not(feature = "syn"), derive(Debug, Hash, PartialEq, Eq))]
+#[cfg_attr(not(feature = "encode"), derive(Debug, Hash, PartialEq, Eq))]
 pub enum Schema {
   /// Named type reference (not a definition).
-  #[cfg(all(feature = "codegen", not(feature = "syn")))]
+  #[cfg(all(feature = "decode", not(feature = "encode")))]
   Native(repr::Str),
   /// Leaf type: bool, u32, String, Uuid, …
-  #[cfg(all(feature = "codegen", not(feature = "syn")))]
+  #[cfg(all(feature = "decode", not(feature = "encode")))]
   Primitive(repr::Primitive),
   /// `Option<T>`
-  #[cfg(all(feature = "codegen", not(feature = "syn")))]
+  #[cfg(all(feature = "decode", not(feature = "encode")))]
   Option(repr::Ty),
   /// `Vec<T>`, `IndexSet<T>`
-  #[cfg(all(feature = "codegen", not(feature = "syn")))]
+  #[cfg(all(feature = "decode", not(feature = "encode")))]
   Seq(repr::Ty),
   /// `HashMap<K, V>`, `BTreeMap<K, V>`, `IndexMap<K, V>`
-  #[cfg(all(feature = "codegen", not(feature = "syn")))]
+  #[cfg(all(feature = "decode", not(feature = "encode")))]
   Map { key: repr::Ty, value: repr::Ty },
   /// `Box<T>`
-  #[cfg(all(feature = "codegen", not(feature = "syn")))]
+  #[cfg(all(feature = "decode", not(feature = "encode")))]
   Box(repr::Ty),
   /// `(A, B, ...)` — tuple type reference
-  #[cfg(all(feature = "codegen", not(feature = "syn")))]
+  #[cfg(all(feature = "decode", not(feature = "encode")))]
   Tuple(repr::Seq<repr::Ty>),
   /// Skipped field — type unavailable
-  #[cfg(all(feature = "codegen", not(feature = "syn")))]
+  #[cfg(all(feature = "decode", not(feature = "encode")))]
   Skipped,
 
   /// Named / tuple / unit struct
@@ -170,9 +170,9 @@ pub enum Schema {
   FromProxy(FromProxy),
 }
 
-#[cfg(any(feature = "syn", feature = "codegen"))]
+#[cfg(any(feature = "encode", feature = "decode"))]
 impl Schema {
-  #[cfg(feature = "syn")]
+  #[cfg(feature = "encode")]
   #[must_use]
   pub const fn ident(&self) -> &repr::Ident {
     match self {
@@ -184,7 +184,7 @@ impl Schema {
     }
   }
 
-  #[cfg(all(feature = "codegen", not(feature = "syn")))]
+  #[cfg(all(feature = "decode", not(feature = "encode")))]
   #[must_use]
   pub fn ident(&self) -> Option<&str> {
     match self {
@@ -198,7 +198,7 @@ impl Schema {
     }
   }
 
-  #[cfg(feature = "syn")]
+  #[cfg(feature = "encode")]
   #[must_use]
   pub const fn generics(&self) -> &repr::Generics {
     match self {
@@ -210,7 +210,7 @@ impl Schema {
     }
   }
 
-  #[cfg(all(feature = "codegen", not(feature = "syn")))]
+  #[cfg(all(feature = "decode", not(feature = "encode")))]
   #[must_use]
   pub const fn generics(&self) -> Option<&repr::Generics> {
     match self {
@@ -224,7 +224,7 @@ impl Schema {
   }
 
   /// Returns `true` if this is a type-reference variant (not a definition).
-  #[cfg(all(feature = "codegen", not(feature = "syn")))]
+  #[cfg(all(feature = "decode", not(feature = "encode")))]
   #[must_use]
   pub const fn is_type_ref(&self) -> bool {
     !matches!(
@@ -242,9 +242,9 @@ impl Schema {
 // Field
 // ---------------------------------------------------------------------------
 
-#[cfg(any(feature = "syn", feature = "codegen"))]
+#[cfg(any(feature = "encode", feature = "decode"))]
 #[derive(Clone, Default)]
-#[cfg_attr(not(feature = "syn"), derive(Debug, Hash, PartialEq, Eq))]
+#[cfg_attr(not(feature = "encode"), derive(Debug, Hash, PartialEq, Eq))]
 pub enum FieldDefault {
   /// No default — field is required (unless `or_default()` provides one).
   #[default]
@@ -255,9 +255,9 @@ pub enum FieldDefault {
   Path(repr::Path),
 }
 
-#[cfg(any(feature = "syn", feature = "codegen"))]
+#[cfg(any(feature = "encode", feature = "decode"))]
 #[derive(Clone)]
-#[cfg_attr(not(feature = "syn"), derive(Debug, Hash, PartialEq, Eq))]
+#[cfg_attr(not(feature = "encode"), derive(Debug, Hash, PartialEq, Eq))]
 pub struct Field {
   pub ident: repr::Ident,
   pub ty: repr::Ty,
@@ -273,18 +273,18 @@ pub struct Field {
 // Struct
 // ---------------------------------------------------------------------------
 
-#[cfg(any(feature = "syn", feature = "codegen"))]
+#[cfg(any(feature = "encode", feature = "decode"))]
 #[derive(Clone)]
-#[cfg_attr(not(feature = "syn"), derive(Debug, Hash, PartialEq, Eq))]
+#[cfg_attr(not(feature = "encode"), derive(Debug, Hash, PartialEq, Eq))]
 pub enum StructShape {
   Named(repr::Seq<Field>),
   Tuple(repr::Seq<repr::Ty>),
   Unit,
 }
 
-#[cfg(any(feature = "syn", feature = "codegen"))]
+#[cfg(any(feature = "encode", feature = "decode"))]
 #[derive(Clone)]
-#[cfg_attr(not(feature = "syn"), derive(Debug, Hash, PartialEq, Eq))]
+#[cfg_attr(not(feature = "encode"), derive(Debug, Hash, PartialEq, Eq))]
 pub struct Struct {
   pub ident: repr::Ident,
   pub generics: repr::Generics,
@@ -296,9 +296,9 @@ pub struct Struct {
 // Transparent
 // ---------------------------------------------------------------------------
 
-#[cfg(any(feature = "syn", feature = "codegen"))]
+#[cfg(any(feature = "encode", feature = "decode"))]
 #[derive(Clone)]
-#[cfg_attr(not(feature = "syn"), derive(Debug, Hash, PartialEq, Eq))]
+#[cfg_attr(not(feature = "encode"), derive(Debug, Hash, PartialEq, Eq))]
 pub struct Transparent {
   pub ident: repr::Ident,
   pub generics: repr::Generics,
@@ -312,7 +312,7 @@ pub struct Transparent {
 // Enum
 // ---------------------------------------------------------------------------
 
-#[cfg(any(feature = "syn", feature = "codegen"))]
+#[cfg(any(feature = "encode", feature = "decode"))]
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub enum Tagging {
   External,
@@ -321,18 +321,18 @@ pub enum Tagging {
   Untagged,
 }
 
-#[cfg(any(feature = "syn", feature = "codegen"))]
+#[cfg(any(feature = "encode", feature = "decode"))]
 #[derive(Clone)]
-#[cfg_attr(not(feature = "syn"), derive(Debug, Hash, PartialEq, Eq))]
+#[cfg_attr(not(feature = "encode"), derive(Debug, Hash, PartialEq, Eq))]
 pub enum VariantKind {
   Unit,
   Named(repr::Seq<Field>),
   Unnamed(repr::Seq<repr::Ty>),
 }
 
-#[cfg(any(feature = "syn", feature = "codegen"))]
+#[cfg(any(feature = "encode", feature = "decode"))]
 #[derive(Clone)]
-#[cfg_attr(not(feature = "syn"), derive(Debug, Hash, PartialEq, Eq))]
+#[cfg_attr(not(feature = "encode"), derive(Debug, Hash, PartialEq, Eq))]
 pub struct Variant {
   pub ident: repr::Ident,
   /// The primary wire name after applying `rename` / `rename_all`.
@@ -343,9 +343,9 @@ pub struct Variant {
   pub kind: VariantKind,
 }
 
-#[cfg(any(feature = "syn", feature = "codegen"))]
+#[cfg(any(feature = "encode", feature = "decode"))]
 #[derive(Clone)]
-#[cfg_attr(not(feature = "syn"), derive(Debug, Hash, PartialEq, Eq))]
+#[cfg_attr(not(feature = "encode"), derive(Debug, Hash, PartialEq, Eq))]
 pub struct Enum {
   pub ident: repr::Ident,
   pub generics: repr::Generics,
@@ -359,8 +359,8 @@ pub struct Enum {
 // ---------------------------------------------------------------------------
 
 /// The struct/enum shape for proxy types that need their own codegen.
-/// Only available at derive-time (`feature = "syn"`).
-#[cfg(feature = "syn")]
+/// Only available at derive-time (`feature = "encode"`).
+#[cfg(feature = "encode")]
 #[derive(Clone)]
 pub enum TypeShape {
   Struct(Struct),
@@ -368,8 +368,8 @@ pub enum TypeShape {
 }
 
 /// How `from_js` is resolved for an `#[serde(into)]` type.
-/// Only available at derive-time (`feature = "syn"`).
-#[cfg(feature = "syn")]
+/// Only available at derive-time (`feature = "encode"`).
+#[cfg(feature = "encode")]
 #[derive(Clone)]
 pub enum FromBody {
   /// `#[serde(from = "X")]` — delegate to proxy's `from_js`.
@@ -380,22 +380,22 @@ pub enum FromBody {
   Own(TypeShape),
 }
 
-#[cfg(any(feature = "syn", feature = "codegen"))]
+#[cfg(any(feature = "encode", feature = "decode"))]
 #[derive(Clone)]
-#[cfg_attr(not(feature = "syn"), derive(Debug, Hash, PartialEq, Eq))]
+#[cfg_attr(not(feature = "encode"), derive(Debug, Hash, PartialEq, Eq))]
 pub struct IntoProxy {
   pub ident: repr::Ident,
   pub generics: repr::Generics,
   pub into_ty: repr::Path,
   /// How `from_js` is resolved. Only available at derive-time — the
   /// binary format does not encode this.
-  #[cfg(feature = "syn")]
+  #[cfg(feature = "encode")]
   pub from_body: FromBody,
 }
 
-#[cfg(any(feature = "syn", feature = "codegen"))]
+#[cfg(any(feature = "encode", feature = "decode"))]
 #[derive(Clone)]
-#[cfg_attr(not(feature = "syn"), derive(Debug, Hash, PartialEq, Eq))]
+#[cfg_attr(not(feature = "encode"), derive(Debug, Hash, PartialEq, Eq))]
 pub struct FromProxy {
   pub ident: repr::Ident,
   pub generics: repr::Generics,
@@ -403,6 +403,6 @@ pub struct FromProxy {
   pub is_try: bool,
   /// The type's own struct/enum shape, used for `to_js` and `patch_js`.
   /// Only available at derive-time — the binary format does not encode this.
-  #[cfg(feature = "syn")]
+  #[cfg(feature = "encode")]
   pub own_shape: TypeShape,
 }

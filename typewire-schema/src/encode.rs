@@ -4,7 +4,7 @@
 //! pairs that construct flat, packed [`coded::Record<T>`](crate::coded::Record)
 //! statics for link-section embedding.
 //!
-//! This module is only available when the `syn` feature is enabled. It is used
+//! This module is only available when the `encode` feature is enabled. It is used
 //! by `typewire-derive` to generate the `type Ident` + `const IDENT` trait
 //! items and the `#[link_section = "typewire_schemas"]` static for each
 //! `#[derive(Typewire)]` type.
