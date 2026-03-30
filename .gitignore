@@ -45,6 +45,7 @@
 !examples/*/README.md
 !examples/*/*.ts
 !examples/*/*.d.ts
+examples/*/*.gen.d.ts
 !examples/*/tsconfig.json
 !examples/*/package.json
 !examples/*/src/

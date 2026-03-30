@@ -61,7 +61,7 @@ pub enum ContainerDefault {
 impl ContainerAttrs {
   pub fn from_attrs(attrs: &[Attribute]) -> Self {
     let mut out = Self::default();
-    for attr in diffable_attrs(attrs) {
+    for attr in diffable_attrs(attrs).chain(typewire_attrs(attrs)) {
       let _ = attr.parse_nested_meta(|meta| {
         if meta.path.is_ident("atomic") {
           out.diffable.atomic = true;
@@ -73,7 +73,7 @@ impl ContainerAttrs {
         Ok(())
       });
     }
-    for attr in serde_attrs(attrs) {
+    for attr in serde_attrs(attrs).chain(typewire_attrs(attrs)) {
       let _ = attr.parse_nested_meta(|meta| {
         if meta.path.is_ident("rename_all") {
           let s = get_lit_str(&meta)?;
@@ -132,7 +132,7 @@ pub struct VariantAttrs {
 impl VariantAttrs {
   pub fn from_attrs(attrs: &[Attribute]) -> Self {
     let mut out = Self::default();
-    for attr in serde_attrs(attrs) {
+    for attr in serde_attrs(attrs).chain(typewire_attrs(attrs)) {
       let _ = attr.parse_nested_meta(|meta| {
         if meta.path.is_ident("rename") {
           let s = get_lit_str(&meta)?;
@@ -199,7 +199,7 @@ pub enum FieldDefault {
 impl FieldAttrs {
   pub fn from_attrs(attrs: &[Attribute]) -> Self {
     let mut out = Self::default();
-    for attr in serde_attrs(attrs) {
+    for attr in serde_attrs(attrs).chain(typewire_attrs(attrs)) {
       let _ = attr.parse_nested_meta(|meta| {
         if meta.path.is_ident("rename") {
           let s = get_lit_str(&meta)?;
@@ -229,22 +229,14 @@ impl FieldAttrs {
           if s.value() == "serde_bytes" {
             out.encoding.serde_bytes = true;
           }
-        } else {
-          // Skip serialize_with, deserialize_with, bound, etc.
-          skip_meta_value(&meta);
-        }
-        Ok(())
-      });
-    }
-    for attr in typewire_attrs(attrs) {
-      let _ = attr.parse_nested_meta(|meta| {
-        if meta.path.is_ident("base64") {
+        } else if meta.path.is_ident("base64") {
           out.encoding.base64 = true;
         } else if meta.path.is_ident("display") {
           out.encoding.display = true;
         } else if meta.path.is_ident("lenient") {
           out.lenient = true;
         } else {
+          // Skip serialize_with, deserialize_with, bound, etc.
           skip_meta_value(&meta);
         }
         Ok(())

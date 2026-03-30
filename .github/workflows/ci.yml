@@ -75,5 +75,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # cargo-deny installs its own toolchain; the pinned rust-toolchain
+      # file would force an unnecessary download of the project toolchain.
       - run: rm rust-toolchain
       - uses: EmbarkStudios/cargo-deny-action@v2

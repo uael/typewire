@@ -34,13 +34,16 @@ use crate::{
 /// Returns `(trait_items, link_section)`:
 /// - `trait_items`: `type Ident = ...; const IDENT: Self::Ident = ...;`
 /// - `link_section`: `const _: () = { #[link_section] #[used] static ... };`
-///   (empty for generic types)
+///   (empty for generic types or when `emit_section` is `false`)
 ///
 /// # Panics
 ///
 /// Panics if any count (generics, fields, variants) exceeds `u32::MAX`.
 #[must_use]
-pub fn generate_schema_and_section(schema: &Schema) -> (TokenStream, TokenStream) {
+pub fn generate_schema_and_section(
+  schema: &Schema,
+  emit_section: bool,
+) -> (TokenStream, TokenStream) {
   let c = quote! { ::typewire::schema::coded };
   let generic_count = u32::try_from(generics_to_strings(schema.generics()).len()).unwrap();
 
@@ -58,31 +61,32 @@ pub fn generate_schema_and_section(schema: &Schema) -> (TokenStream, TokenStream
   let ident_bytes = proc_macro2::Literal::byte_string(ident_str.as_bytes());
 
   let trait_items = quote! {
-      type Ident = #c::Ident<#ident_len>;
-      const IDENT: Self::Ident = #c::Ident::new(*#ident_bytes);
+    type Ident = #c::Ident<#ident_len>;
+    const IDENT: Self::Ident = #c::Ident::new(*#ident_bytes);
   };
 
-  // Generic types skip the link section (can't have statics in generic contexts)
+  // Skip the link section for generic types (can't have statics in generic
+  // contexts) or when schema embedding is disabled.
   let has_generic_params = !schema.generics().params.is_empty();
 
-  let link_section = if has_generic_params {
+  let link_section = if has_generic_params || !emit_section {
     TokenStream::new()
   } else {
     // NB: link_section requires a string literal — must match coded::SECTION_NAME.
     quote! {
-        const _: () = {
-            #[cfg_attr(
-                target_vendor = "apple",
-                unsafe(link_section = "__DATA,typewire_schemas")
-            )]
-            #[cfg_attr(
-                not(target_vendor = "apple"),
-                unsafe(link_section = "typewire_schemas")
-            )]
-            #[used]
-            static __TYPEWIRE_SCHEMA: #c::Record<#record_type> =
-                #c::Record::new(#record_value);
-        };
+      const _: () = {
+        #[cfg_attr(
+          target_vendor = "apple",
+          unsafe(link_section = "__DATA,typewire_schemas")
+        )]
+        #[cfg_attr(
+          not(target_vendor = "apple"),
+          unsafe(link_section = "typewire_schemas")
+        )]
+        #[used]
+        static __TYPEWIRE_SCHEMA: #c::Record<#record_type> =
+          #c::Record::new(#record_value);
+      };
     }
   };
 
@@ -131,18 +135,18 @@ fn coded_struct(s: &Struct, c: &TokenStream, generic_count: u32) -> (TokenStream
 
       let types_name = types_ident(n);
       let record_type = quote! {
-          #c::FlatStruct<#ident_len, #c::#types_name<#(#field_types),*>>
+        #c::FlatStruct<#ident_len, #c::#types_name<#(#field_types),*>>
       };
       let record_value = quote! {
-          #c::FlatStruct {
-              tag: #c::Tag::Struct,
-              ident: #c::Ident::new(*#ident_bytes),
-              flags: ::typewire::schema::StructFlags::from_bits_retain(#flags_bits),
-              shape: #c::StructShapeTag::Named,
-              generic_count: #c::U32Le::new(#generic_count),
-              field_count: #c::U32Le::new(#field_count),
-              fields: #c::#types_name(#(#field_values),*),
-          }
+        #c::FlatStruct {
+          tag: #c::Tag::Struct,
+          ident: #c::Ident::new(*#ident_bytes),
+          flags: ::typewire::schema::StructFlags::from_bits_retain(#flags_bits),
+          shape: #c::StructShapeTag::Named,
+          generic_count: #c::U32Le::new(#generic_count),
+          field_count: #c::U32Le::new(#field_count),
+          fields: #c::#types_name(#(#field_values),*),
+        }
       };
       (record_type, record_value)
     }
@@ -157,33 +161,33 @@ fn coded_struct(s: &Struct, c: &TokenStream, generic_count: u32) -> (TokenStream
 
       let types_name = types_ident(n);
       let record_type = quote! {
-          #c::FlatStruct<#ident_len, #c::#types_name<#(#ident_types),*>>
+        #c::FlatStruct<#ident_len, #c::#types_name<#(#ident_types),*>>
       };
       let record_value = quote! {
-          #c::FlatStruct {
-              tag: #c::Tag::Struct,
-              ident: #c::Ident::new(*#ident_bytes),
-              flags: ::typewire::schema::StructFlags::from_bits_retain(#flags_bits),
-              shape: #c::StructShapeTag::Tuple,
-              generic_count: #c::U32Le::new(#generic_count),
-              field_count: #c::U32Le::new(#field_count),
-              fields: #c::#types_name(#(#ident_values),*),
-          }
+        #c::FlatStruct {
+          tag: #c::Tag::Struct,
+          ident: #c::Ident::new(*#ident_bytes),
+          flags: ::typewire::schema::StructFlags::from_bits_retain(#flags_bits),
+          shape: #c::StructShapeTag::Tuple,
+          generic_count: #c::U32Le::new(#generic_count),
+          field_count: #c::U32Le::new(#field_count),
+          fields: #c::#types_name(#(#ident_values),*),
+        }
       };
       (record_type, record_value)
     }
     StructShape::Unit => {
       let record_type = quote! { #c::FlatStruct<#ident_len> };
       let record_value = quote! {
-          #c::FlatStruct {
-              tag: #c::Tag::Struct,
-              ident: #c::Ident::new(*#ident_bytes),
-              flags: ::typewire::schema::StructFlags::from_bits_retain(#flags_bits),
-              shape: #c::StructShapeTag::Unit,
-              generic_count: #c::U32Le::new(#generic_count),
-              field_count: #c::U32Le::new(0u32),
-              fields: #c::Types0(),
-          }
+        #c::FlatStruct {
+          tag: #c::Tag::Struct,
+          ident: #c::Ident::new(*#ident_bytes),
+          flags: ::typewire::schema::StructFlags::from_bits_retain(#flags_bits),
+          shape: #c::StructShapeTag::Unit,
+          generic_count: #c::U32Le::new(#generic_count),
+          field_count: #c::U32Le::new(0u32),
+          fields: #c::Types0(),
+        }
       };
       (record_type, record_value)
     }
@@ -226,13 +230,13 @@ fn coded_flat_field(f: &Field, c: &TokenStream) -> (TokenStream, TokenStream) {
 
   let field_type = quote! { #c::FlatField<#ident_len, #wire_len, #ty_type> };
   let field_value = quote! {
-      #c::FlatField {
-          ident: #c::Ident::new(*#ident_bytes),
-          ty: #ty_value,
-          wire_name: #c::Ident::new(*#wire_bytes),
-          flags: ::typewire::schema::FieldFlags::from_bits_retain(#flags_bits),
-          default: #default_kind,
-      }
+    #c::FlatField {
+      ident: #c::Ident::new(*#ident_bytes),
+      ty: #ty_value,
+      wire_name: #c::Ident::new(*#wire_bytes),
+      flags: ::typewire::schema::FieldFlags::from_bits_retain(#flags_bits),
+      default: #default_kind,
+    }
   };
   (field_type, field_value)
 }
@@ -250,15 +254,15 @@ fn coded_transparent(t: &Transparent, c: &TokenStream) -> (TokenStream, TokenStr
   let field_ty = &t.field_ty;
 
   let record_type = quote! {
-      #c::FlatTransparent<#ident_len, <#field_ty as ::typewire::Typewire>::Ident>
+    #c::FlatTransparent<#ident_len, <#field_ty as ::typewire::Typewire>::Ident>
   };
   let record_value = quote! {
-      #c::FlatTransparent {
-          tag: #c::Tag::Transparent,
-          ident: #c::Ident::new(*#ident_bytes),
-          atomic: #atomic,
-          inner: <#field_ty as ::typewire::Typewire>::IDENT,
-      }
+    #c::FlatTransparent {
+      tag: #c::Tag::Transparent,
+      ident: #c::Ident::new(*#ident_bytes),
+      atomic: #atomic,
+      inner: <#field_ty as ::typewire::Typewire>::IDENT,
+    }
   };
   (record_type, record_value)
 }
@@ -297,21 +301,21 @@ fn coded_enum(e: &Enum, c: &TokenStream, generic_count: u32) -> (TokenStream, To
   let types_name = types_ident(n);
 
   let record_type = quote! {
-      #c::FlatEnum<#ident_len, #tag_key_len, #content_key_len,
-          #c::#types_name<#(#variant_types),*>>
+    #c::FlatEnum<#ident_len, #tag_key_len, #content_key_len,
+      #c::#types_name<#(#variant_types),*>>
   };
   let record_value = quote! {
-      #c::FlatEnum {
-          tag: #c::Tag::Enum,
-          ident: #c::Ident::new(*#ident_bytes),
-          flags: ::typewire::schema::EnumFlags::from_bits_retain(#flags_bits),
-          tagging: #tagging_kind,
-          tag_key: #c::Ident::new(*#tag_key_bytes),
-          content_key: #c::Ident::new(*#content_key_bytes),
-          generic_count: #c::U32Le::new(#generic_count),
-          variant_count: #c::U32Le::new(#variant_count),
-          variants: #c::#types_name(#(#variant_values),*),
-      }
+    #c::FlatEnum {
+      tag: #c::Tag::Enum,
+      ident: #c::Ident::new(*#ident_bytes),
+      flags: ::typewire::schema::EnumFlags::from_bits_retain(#flags_bits),
+      tagging: #tagging_kind,
+      tag_key: #c::Ident::new(*#tag_key_bytes),
+      content_key: #c::Ident::new(*#content_key_bytes),
+      generic_count: #c::U32Le::new(#generic_count),
+      variant_count: #c::U32Le::new(#variant_count),
+      variants: #c::#types_name(#(#variant_values),*),
+    }
   };
   (record_type, record_value)
 }
@@ -337,14 +341,14 @@ fn coded_flat_variant(v: &Variant, c: &TokenStream) -> (TokenStream, TokenStream
   if is_skipped {
     let variant_type = quote! { #c::FlatVariant<#ident_len, #wire_len> };
     let variant_value = quote! {
-        #c::FlatVariant {
-            ident: #c::Ident::new(*#ident_bytes),
-            wire_name: #c::Ident::new(*#wire_bytes),
-            flags: ::typewire::schema::VariantFlags::from_bits_retain(#flags_bits),
-            kind: #c::VariantKindTag::Unit,
-            child_count: #c::U32Le::new(0u32),
-            fields: #c::Types0(),
-        }
+      #c::FlatVariant {
+        ident: #c::Ident::new(*#ident_bytes),
+        wire_name: #c::Ident::new(*#wire_bytes),
+        flags: ::typewire::schema::VariantFlags::from_bits_retain(#flags_bits),
+        kind: #c::VariantKindTag::Unit,
+        child_count: #c::U32Le::new(0u32),
+        fields: #c::Types0(),
+      }
     };
     return (variant_type, variant_value);
   }
@@ -353,14 +357,14 @@ fn coded_flat_variant(v: &Variant, c: &TokenStream) -> (TokenStream, TokenStream
     VariantKind::Unit => {
       let variant_type = quote! { #c::FlatVariant<#ident_len, #wire_len> };
       let variant_value = quote! {
-          #c::FlatVariant {
-              ident: #c::Ident::new(*#ident_bytes),
-              wire_name: #c::Ident::new(*#wire_bytes),
-              flags: ::typewire::schema::VariantFlags::from_bits_retain(#flags_bits),
-              kind: #c::VariantKindTag::Unit,
-              child_count: #c::U32Le::new(0u32),
-              fields: #c::Types0(),
-          }
+        #c::FlatVariant {
+          ident: #c::Ident::new(*#ident_bytes),
+          wire_name: #c::Ident::new(*#wire_bytes),
+          flags: ::typewire::schema::VariantFlags::from_bits_retain(#flags_bits),
+          kind: #c::VariantKindTag::Unit,
+          child_count: #c::U32Le::new(0u32),
+          fields: #c::Types0(),
+        }
       };
       (variant_type, variant_value)
     }
@@ -373,17 +377,17 @@ fn coded_flat_variant(v: &Variant, c: &TokenStream) -> (TokenStream, TokenStream
         fields.iter().map(|f| coded_flat_field(f, c)).unzip();
 
       let variant_type = quote! {
-          #c::FlatVariant<#ident_len, #wire_len, #c::#types_name<#(#field_types),*>>
+        #c::FlatVariant<#ident_len, #wire_len, #c::#types_name<#(#field_types),*>>
       };
       let variant_value = quote! {
-          #c::FlatVariant {
-              ident: #c::Ident::new(*#ident_bytes),
-              wire_name: #c::Ident::new(*#wire_bytes),
-              flags: ::typewire::schema::VariantFlags::from_bits_retain(#flags_bits),
-              kind: #c::VariantKindTag::Named,
-              child_count: #c::U32Le::new(#child_count),
-              fields: #c::#types_name(#(#field_values),*),
-          }
+        #c::FlatVariant {
+          ident: #c::Ident::new(*#ident_bytes),
+          wire_name: #c::Ident::new(*#wire_bytes),
+          flags: ::typewire::schema::VariantFlags::from_bits_retain(#flags_bits),
+          kind: #c::VariantKindTag::Named,
+          child_count: #c::U32Le::new(#child_count),
+          fields: #c::#types_name(#(#field_values),*),
+        }
       };
       (variant_type, variant_value)
     }
@@ -398,17 +402,17 @@ fn coded_flat_variant(v: &Variant, c: &TokenStream) -> (TokenStream, TokenStream
         types.iter().map(|ty| quote! { <#ty as ::typewire::Typewire>::IDENT }).collect();
 
       let variant_type = quote! {
-          #c::FlatVariant<#ident_len, #wire_len, #c::#types_name<#(#ident_types),*>>
+        #c::FlatVariant<#ident_len, #wire_len, #c::#types_name<#(#ident_types),*>>
       };
       let variant_value = quote! {
-          #c::FlatVariant {
-              ident: #c::Ident::new(*#ident_bytes),
-              wire_name: #c::Ident::new(*#wire_bytes),
-              flags: ::typewire::schema::VariantFlags::from_bits_retain(#flags_bits),
-              kind: #c::VariantKindTag::Unnamed,
-              child_count: #c::U32Le::new(#child_count),
-              fields: #c::#types_name(#(#ident_values),*),
-          }
+        #c::FlatVariant {
+          ident: #c::Ident::new(*#ident_bytes),
+          wire_name: #c::Ident::new(*#wire_bytes),
+          flags: ::typewire::schema::VariantFlags::from_bits_retain(#flags_bits),
+          kind: #c::VariantKindTag::Unnamed,
+          child_count: #c::U32Le::new(#child_count),
+          fields: #c::#types_name(#(#ident_values),*),
+        }
       };
       (variant_type, variant_value)
     }
@@ -431,15 +435,15 @@ fn coded_into_proxy(
   let into_ty = &p.into_ty;
 
   let record_type = quote! {
-      #c::FlatIntoProxy<#ident_len, <#into_ty as ::typewire::Typewire>::Ident>
+    #c::FlatIntoProxy<#ident_len, <#into_ty as ::typewire::Typewire>::Ident>
   };
   let record_value = quote! {
-      #c::FlatIntoProxy {
-          tag: #c::Tag::IntoProxy,
-          ident: #c::Ident::new(*#ident_bytes),
-          generic_count: #c::U32Le::new(#generic_count),
-          into_ty: <#into_ty as ::typewire::Typewire>::IDENT,
-      }
+    #c::FlatIntoProxy {
+      tag: #c::Tag::IntoProxy,
+      ident: #c::Ident::new(*#ident_bytes),
+      generic_count: #c::U32Le::new(#generic_count),
+      into_ty: <#into_ty as ::typewire::Typewire>::IDENT,
+    }
   };
   (record_type, record_value)
 }
@@ -457,16 +461,16 @@ fn coded_from_proxy(
   let is_try = u8::from(p.is_try);
 
   let record_type = quote! {
-      #c::FlatFromProxy<#ident_len, <#proxy as ::typewire::Typewire>::Ident>
+    #c::FlatFromProxy<#ident_len, <#proxy as ::typewire::Typewire>::Ident>
   };
   let record_value = quote! {
-      #c::FlatFromProxy {
-          tag: #c::Tag::FromProxy,
-          ident: #c::Ident::new(*#ident_bytes),
-          generic_count: #c::U32Le::new(#generic_count),
-          proxy: <#proxy as ::typewire::Typewire>::IDENT,
-          is_try: #is_try,
-      }
+    #c::FlatFromProxy {
+      tag: #c::Tag::FromProxy,
+      ident: #c::Ident::new(*#ident_bytes),
+      generic_count: #c::U32Le::new(#generic_count),
+      proxy: <#proxy as ::typewire::Typewire>::IDENT,
+      is_try: #is_try,
+    }
   };
   (record_type, record_value)
 }

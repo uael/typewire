@@ -140,13 +140,25 @@ fn test_e2e(sh: &mut Shell) -> Result<()> {
   // Build wasm.
   cmd!(sh, "cargo build -p todo-app --target {WASM_TARGET} --release").run_echo()?;
 
-  // Generate TypeScript and diff against checked-in snapshot.
+  // Generate TypeScript (strips the section by default) and diff against
+  // the checked-in snapshot.
   cmd!(
     sh,
-    "cargo run -p typewire --features cli -- target/{WASM_TARGET}/release/todo_app.wasm --no-strip -o examples/todo-app/types.gen.d.ts"
+    "cargo run -p typewire --features cli -- target/{WASM_TARGET}/release/todo_app.wasm -o examples/todo-app/types.gen.d.ts"
   )
   .run_echo()?;
   cmd!(sh, "diff examples/todo-app/types.d.ts examples/todo-app/types.gen.d.ts").run_echo()?;
+
+  // Assert the typewire_schemas section was stripped from the binary.
+  assert!(
+    cmd!(
+      sh,
+      "cargo run -p typewire --features cli -- target/{WASM_TARGET}/release/todo_app.wasm -o /dev/null"
+    )
+    .run()
+    .is_err(),
+    "typewire_schemas section should have been stripped"
+  );
 
   // Generate JS bindings.
   cmd!(

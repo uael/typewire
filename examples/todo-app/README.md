@@ -12,7 +12,7 @@ cargo build -p todo-app --target wasm32-unknown-unknown --release
 # 2. Generate TypeScript declarations
 cargo run -p typewire --features cli -- \
   target/wasm32-unknown-unknown/release/todo_app.wasm \
-  --no-strip -o examples/todo-app/types.d.ts
+  -o examples/todo-app/types.d.ts
 
 # 3. Generate JS bindings and run the test
 wasm-bindgen target/wasm32-unknown-unknown/release/todo_app.wasm \

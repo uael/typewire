@@ -28,17 +28,17 @@ impl Codegen for WasmCodegen {
 
     vec![
       quote! {
-          fn to_js(&self) -> ::wasm_bindgen::JsValue {
-              use ::wasm_bindgen::JsCast as _;
-              #to_js_body
-          }
+        fn to_js(&self) -> ::wasm_bindgen::JsValue {
+          use ::wasm_bindgen::JsCast as _;
+          #to_js_body
+        }
       },
       quote! {
-          fn from_js(value: ::wasm_bindgen::JsValue) -> ::core::result::Result<Self, ::typewire::Error> {
-              use ::wasm_bindgen::JsCast as _;
-              (|| { #from_js_body })()
-                  .map_err(|e: ::typewire::Error| e.in_context(#name_str))
-          }
+        fn from_js(value: ::wasm_bindgen::JsValue) -> ::core::result::Result<Self, ::typewire::Error> {
+          use ::wasm_bindgen::JsCast as _;
+          (|| { #from_js_body })()
+            .map_err(|e: ::typewire::Error| e.in_context(#name_str))
+        }
       },
       patch_js,
     ]
@@ -60,29 +60,29 @@ impl Codegen for WasmCodegen {
 
     let patch_js = if t.atomic {
       quote! {
-          fn patch_js(&self, old: &::wasm_bindgen::JsValue, set: impl FnOnce(::wasm_bindgen::JsValue)) {
-              typewire::patch_js_atomic(self, old, set);
-          }
+        fn patch_js(&self, old: &::wasm_bindgen::JsValue, set: impl FnOnce(::wasm_bindgen::JsValue)) {
+          typewire::patch_js_atomic(self, old, set);
+        }
       }
     } else {
       quote! {
-          fn patch_js(&self, old: &::wasm_bindgen::JsValue, set: impl FnOnce(::wasm_bindgen::JsValue)) {
-              <#ty as ::typewire::Typewire>::patch_js(&#access, old, set);
-          }
+        fn patch_js(&self, old: &::wasm_bindgen::JsValue, set: impl FnOnce(::wasm_bindgen::JsValue)) {
+          <#ty as ::typewire::Typewire>::patch_js(&#access, old, set);
+        }
       }
     };
 
     vec![
       quote! {
-          fn to_js(&self) -> ::wasm_bindgen::JsValue {
-              <#ty as ::typewire::Typewire>::to_js(&#access)
-          }
+        fn to_js(&self) -> ::wasm_bindgen::JsValue {
+          <#ty as ::typewire::Typewire>::to_js(&#access)
+        }
       },
       quote! {
-          fn from_js(value: ::wasm_bindgen::JsValue) -> ::core::result::Result<Self, ::typewire::Error> {
-              let val = <#ty as ::typewire::Typewire>::from_js(value)?;
-              Ok(#construct)
-          }
+        fn from_js(value: ::wasm_bindgen::JsValue) -> ::core::result::Result<Self, ::typewire::Error> {
+          let val = <#ty as ::typewire::Typewire>::from_js(value)?;
+          Ok(#construct)
+        }
       },
       patch_js,
     ]
@@ -96,17 +96,17 @@ impl Codegen for WasmCodegen {
 
     vec![
       quote! {
-          fn to_js(&self) -> ::wasm_bindgen::JsValue {
-              use ::wasm_bindgen::JsCast as _;
-              #to_js_body
-          }
+        fn to_js(&self) -> ::wasm_bindgen::JsValue {
+          use ::wasm_bindgen::JsCast as _;
+          #to_js_body
+        }
       },
       quote! {
-          fn from_js(value: ::wasm_bindgen::JsValue) -> ::core::result::Result<Self, ::typewire::Error> {
-              use ::wasm_bindgen::JsCast as _;
-              (|| { #from_js_body })()
-                  .map_err(|e: ::typewire::Error| e.in_context(#name_str))
-          }
+        fn from_js(value: ::wasm_bindgen::JsValue) -> ::core::result::Result<Self, ::typewire::Error> {
+          use ::wasm_bindgen::JsCast as _;
+          (|| { #from_js_body })()
+            .map_err(|e: ::typewire::Error| e.in_context(#name_str))
+        }
       },
       patch_js,
     ]
@@ -117,13 +117,13 @@ impl Codegen for WasmCodegen {
 
     let from_js_body = match &p.from_body {
       FromBody::Proxy(proxy) => quote! {
-          let proxy = <#proxy as ::typewire::Typewire>::from_js(value)?;
-          Ok(<Self as ::core::convert::From<#proxy>>::from(proxy))
+        let proxy = <#proxy as ::typewire::Typewire>::from_js(value)?;
+        Ok(<Self as ::core::convert::From<#proxy>>::from(proxy))
       },
       FromBody::TryProxy(proxy) => quote! {
-          let proxy = <#proxy as ::typewire::Typewire>::from_js(value)?;
-          <Self as ::core::convert::TryFrom<#proxy>>::try_from(proxy)
-              .map_err(|e| ::typewire::Error::Custom(::std::string::ToString::to_string(&e)))
+        let proxy = <#proxy as ::typewire::Typewire>::from_js(value)?;
+        <Self as ::core::convert::TryFrom<#proxy>>::try_from(proxy)
+          .map_err(|e| ::typewire::Error::Custom(::std::string::ToString::to_string(&e)))
       },
       FromBody::Own(shape) => match shape {
         TypeShape::Struct(s) => struct_from_js_body(s),
@@ -133,21 +133,21 @@ impl Codegen for WasmCodegen {
 
     vec![
       quote! {
-          fn to_js(&self) -> ::wasm_bindgen::JsValue {
-              let proxy: #into_ty = ::core::convert::Into::into(self.clone());
-              <#into_ty as ::typewire::Typewire>::to_js(&proxy)
-          }
+        fn to_js(&self) -> ::wasm_bindgen::JsValue {
+          let proxy: #into_ty = ::core::convert::Into::into(self.clone());
+          <#into_ty as ::typewire::Typewire>::to_js(&proxy)
+        }
       },
       quote! {
-          fn from_js(value: ::wasm_bindgen::JsValue) -> ::core::result::Result<Self, ::typewire::Error> {
-              #from_js_body
-          }
+        fn from_js(value: ::wasm_bindgen::JsValue) -> ::core::result::Result<Self, ::typewire::Error> {
+          #from_js_body
+        }
       },
       quote! {
-          fn patch_js(&self, old: &::wasm_bindgen::JsValue, set: impl FnOnce(::wasm_bindgen::JsValue)) {
-              let proxy: #into_ty = ::core::convert::Into::into(self.clone());
-              <#into_ty as ::typewire::Typewire>::patch_js(&proxy, old, set);
-          }
+        fn patch_js(&self, old: &::wasm_bindgen::JsValue, set: impl FnOnce(::wasm_bindgen::JsValue)) {
+          let proxy: #into_ty = ::core::convert::Into::into(self.clone());
+          <#into_ty as ::typewire::Typewire>::patch_js(&proxy, old, set);
+        }
       },
     ]
   }
@@ -159,14 +159,14 @@ impl Codegen for WasmCodegen {
 
     let from_body = if p.is_try {
       quote! {
-          let proxy = <#proxy as ::typewire::Typewire>::from_js(value)?;
-          <#name #ty_generics as ::core::convert::TryFrom<#proxy>>::try_from(proxy)
-              .map_err(|e| ::typewire::Error::Custom(::std::string::ToString::to_string(&e)))
+        let proxy = <#proxy as ::typewire::Typewire>::from_js(value)?;
+        <#name #ty_generics as ::core::convert::TryFrom<#proxy>>::try_from(proxy)
+          .map_err(|e| ::typewire::Error::Custom(::std::string::ToString::to_string(&e)))
       }
     } else {
       quote! {
-          let proxy = <#proxy as ::typewire::Typewire>::from_js(value)?;
-          Ok(<#name #ty_generics as ::core::convert::From<#proxy>>::from(proxy))
+        let proxy = <#proxy as ::typewire::Typewire>::from_js(value)?;
+        Ok(<#name #ty_generics as ::core::convert::From<#proxy>>::from(proxy))
       }
     };
 
@@ -182,15 +182,15 @@ impl Codegen for WasmCodegen {
 
     vec![
       quote! {
-          fn to_js(&self) -> ::wasm_bindgen::JsValue {
-              use ::wasm_bindgen::JsCast as _;
-              #to_js_body
-          }
+        fn to_js(&self) -> ::wasm_bindgen::JsValue {
+          use ::wasm_bindgen::JsCast as _;
+          #to_js_body
+        }
       },
       quote! {
-          fn from_js(value: ::wasm_bindgen::JsValue) -> ::core::result::Result<Self, ::typewire::Error> {
-              #from_body
-          }
+        fn from_js(value: ::wasm_bindgen::JsValue) -> ::core::result::Result<Self, ::typewire::Error> {
+          #from_body
+        }
       },
       patch_js,
     ]
@@ -216,38 +216,38 @@ fn struct_to_js_body(s: &SchemaStruct) -> TokenStream {
 
         if f.flags.contains(FieldFlags::FLATTEN) {
           return Some(quote! {
-              {
-                  let inner = #to_js;
-                  if let Some(inner_obj) = inner.dyn_ref::<::js_sys::Object>() {
-                      let entries = ::js_sys::Object::entries(inner_obj);
-                      for i in 0..entries.length() {
-                          let pair: ::js_sys::Array = entries.get(i).into();
-                          let _ = ::js_sys::Reflect::set(&obj, &pair.get(0), &pair.get(1));
-                      }
-                  }
+            {
+              let inner = #to_js;
+              if let Some(inner_obj) = inner.dyn_ref::<::js_sys::Object>() {
+                let entries = ::js_sys::Object::entries(inner_obj);
+                for i in 0..entries.length() {
+                  let pair: ::js_sys::Array = entries.get(i).into();
+                  let _ = ::js_sys::Reflect::set(&obj, &pair.get(0), &pair.get(1));
+                }
               }
+            }
           });
         }
 
         let setter = f.skip_serializing_if.as_ref().map_or_else(
           || {
             quote! {
-                let _ = ::js_sys::Reflect::set(
-                    &obj,
-                    &::wasm_bindgen::JsValue::from_str(#js_key),
-                    &#to_js,
-                );
+              let _ = ::js_sys::Reflect::set(
+                &obj,
+                &::wasm_bindgen::JsValue::from_str(#js_key),
+                &#to_js,
+              );
             }
           },
           |pred_path| {
             quote! {
-                if !#pred_path(&self.#ident) {
-                    let _ = ::js_sys::Reflect::set(
-                        &obj,
-                        &::wasm_bindgen::JsValue::from_str(#js_key),
-                        &#to_js,
-                    );
-                }
+              if !#pred_path(&self.#ident) {
+                let _ = ::js_sys::Reflect::set(
+                  &obj,
+                  &::wasm_bindgen::JsValue::from_str(#js_key),
+                  &#to_js,
+                );
+              }
             }
           },
         );
@@ -256,22 +256,22 @@ fn struct_to_js_body(s: &SchemaStruct) -> TokenStream {
       });
 
       quote! {
-          let obj = ::js_sys::Object::new();
-          #(#setters)*
-          obj.into()
+        let obj = ::js_sys::Object::new();
+        #(#setters)*
+        obj.into()
       }
     }
     StructShape::Tuple(types) => {
       let setters = types.iter().enumerate().map(|(i, _)| {
         let idx = Index::from(i);
         quote! {
-            arr.push(&::typewire::Typewire::to_js(&self.#idx));
+          arr.push(&::typewire::Typewire::to_js(&self.#idx));
         }
       });
       quote! {
-          let arr = ::js_sys::Array::new();
-          #(#setters)*
-          arr.into()
+        let arr = ::js_sys::Array::new();
+        #(#setters)*
+        arr.into()
       }
     }
     StructShape::Unit => quote! { ::wasm_bindgen::JsValue::NULL },
@@ -294,30 +294,30 @@ fn struct_from_js_body(s: &SchemaStruct) -> TokenStream {
           .map(|f| f.wire_name.as_str())
           .collect();
         quote! {
-            if let Some(__obj) = value.dyn_ref::<::js_sys::Object>() {
-                let __keys = ::js_sys::Object::keys(__obj);
-                for __i in 0..__keys.length() {
-                    let __k = __keys.get(__i);
-                    if let Some(ref __key) = __k.as_string() {
-                        let __known: &[&str] = &[#(#known_keys),*];
-                        if !__known.contains(&__key.as_str()) {
-                            return Err(::typewire::Error::InvalidValue {
-                                message: ::std::format!("unknown field `{__key}`"),
-                            });
-                        }
-                    }
+          if let Some(__obj) = value.dyn_ref::<::js_sys::Object>() {
+            let __keys = ::js_sys::Object::keys(__obj);
+            for __i in 0..__keys.length() {
+              let __k = __keys.get(__i);
+              if let Some(ref __key) = __k.as_string() {
+                let __known: &[&str] = &[#(#known_keys),*];
+                if !__known.contains(&__key.as_str()) {
+                  return Err(::typewire::Error::InvalidValue {
+                    message: ::std::format!("unknown field `{__key}`"),
+                  });
                 }
+              }
             }
+          }
         }
       } else {
         quote! {}
       };
 
       quote! {
-          let __obj = &value;
-          #deny_check
-          #(#field_bindings)*
-          Ok(#name { #(#field_names,)* })
+        let __obj = &value;
+        #deny_check
+        #(#field_bindings)*
+        Ok(#name { #(#field_names,)* })
       }
     }
     StructShape::Tuple(types) => {
@@ -325,16 +325,16 @@ fn struct_from_js_body(s: &SchemaStruct) -> TokenStream {
         let var = format_ident!("__field{i}");
         let idx = u32::try_from(i).unwrap();
         quote! {
-            let #var = <#ty as ::typewire::Typewire>::from_js(arr.get(#idx))?;
+          let #var = <#ty as ::typewire::Typewire>::from_js(arr.get(#idx))?;
         }
       });
       let vars: Vec<_> = (0..types.len()).map(|i| format_ident!("__field{i}")).collect();
       quote! {
-          let arr: ::js_sys::Array = value
-              .try_into()
-              .map_err(|_| ::typewire::Error::UnexpectedType { expected: "array" })?;
-          #(#bindings)*
-          Ok(#name(#(#vars),*))
+        let arr: ::js_sys::Array = value
+          .try_into()
+          .map_err(|_| ::typewire::Error::UnexpectedType { expected: "array" })?;
+        #(#bindings)*
+        Ok(#name(#(#vars),*))
       }
     }
     StructShape::Unit => quote! { Ok(#name) },
@@ -344,12 +344,12 @@ fn struct_from_js_body(s: &SchemaStruct) -> TokenStream {
 fn struct_patch_js_fn(s: &SchemaStruct) -> TokenStream {
   if s.flags.contains(StructFlags::ATOMIC) {
     return quote! {
-        fn patch_js(&self, old: &::wasm_bindgen::JsValue, set: impl FnOnce(::wasm_bindgen::JsValue)) {
-            match Self::from_js(old.clone()) {
-                Ok(ref old_val) if self == old_val => {}
-                _ => set(self.to_js()),
-            }
+      fn patch_js(&self, old: &::wasm_bindgen::JsValue, set: impl FnOnce(::wasm_bindgen::JsValue)) {
+        match Self::from_js(old.clone()) {
+          Ok(ref old_val) if self == old_val => {}
+          _ => set(self.to_js()),
         }
+      }
     };
   }
 
@@ -358,13 +358,13 @@ fn struct_patch_js_fn(s: &SchemaStruct) -> TokenStream {
       let field_patches = patch_self_fields(fields, &quote! { old });
 
       quote! {
-          fn patch_js(&self, old: &::wasm_bindgen::JsValue, _set: impl FnOnce(::wasm_bindgen::JsValue)) {
-              if old.is_undefined() || old.is_null() {
-                  _set(self.to_js());
-                  return;
-              }
-              #(#field_patches)*
+        fn patch_js(&self, old: &::wasm_bindgen::JsValue, _set: impl FnOnce(::wasm_bindgen::JsValue)) {
+          if old.is_undefined() || old.is_null() {
+            _set(self.to_js());
+            return;
           }
+          #(#field_patches)*
+        }
       }
     }
     StructShape::Tuple(types) => {
@@ -373,24 +373,24 @@ fn struct_patch_js_fn(s: &SchemaStruct) -> TokenStream {
           let idx = Index::from(i);
           let js_idx = u32::try_from(i).unwrap();
           quote! {
-              self.#idx.patch_js(&__arr.get(#js_idx), |v| __arr.set(#js_idx, v));
+            self.#idx.patch_js(&__arr.get(#js_idx), |v| __arr.set(#js_idx, v));
           }
         })
         .collect();
       quote! {
-          fn patch_js(&self, old: &::wasm_bindgen::JsValue, _set: impl FnOnce(::wasm_bindgen::JsValue)) {
-              use ::wasm_bindgen::JsCast as _;
-              let Some(__arr) = old.dyn_ref::<::js_sys::Array>() else {
-                  _set(self.to_js());
-                  return;
-              };
-              #(#patches)*
-          }
+        fn patch_js(&self, old: &::wasm_bindgen::JsValue, _set: impl FnOnce(::wasm_bindgen::JsValue)) {
+          use ::wasm_bindgen::JsCast as _;
+          let Some(__arr) = old.dyn_ref::<::js_sys::Array>() else {
+            _set(self.to_js());
+            return;
+          };
+          #(#patches)*
+        }
       }
     }
     StructShape::Unit => {
       quote! {
-          fn patch_js(&self, _old: &::wasm_bindgen::JsValue, _set: impl FnOnce(::wasm_bindgen::JsValue)) {}
+        fn patch_js(&self, _old: &::wasm_bindgen::JsValue, _set: impl FnOnce(::wasm_bindgen::JsValue)) {}
       }
     }
   }
@@ -421,32 +421,32 @@ fn enum_from_js_body(e: &SchemaEnum) -> TokenStream {
 fn enum_patch_js_fn(e: &SchemaEnum) -> TokenStream {
   if e.flags.contains(EnumFlags::ATOMIC) {
     return quote! {
-        fn patch_js(&self, old: &::wasm_bindgen::JsValue, set: impl FnOnce(::wasm_bindgen::JsValue)) {
-            ::typewire::patch_js_atomic(self, old, set);
-        }
+      fn patch_js(&self, old: &::wasm_bindgen::JsValue, set: impl FnOnce(::wasm_bindgen::JsValue)) {
+        ::typewire::patch_js_atomic(self, old, set);
+      }
     };
   }
 
   if e.flags.contains(EnumFlags::ALL_UNIT) {
     return quote! {
-        fn patch_js(&self, old: &::wasm_bindgen::JsValue, set: impl FnOnce(::wasm_bindgen::JsValue)) {
-            let new = self.to_js();
-            if old != &new {
-                set(new);
-            }
+      fn patch_js(&self, old: &::wasm_bindgen::JsValue, set: impl FnOnce(::wasm_bindgen::JsValue)) {
+        let new = self.to_js();
+        if old != &new {
+          set(new);
         }
+      }
     };
   }
 
   match &e.tagging {
     Tagging::Untagged => {
       quote! {
-          fn patch_js(&self, old: &::wasm_bindgen::JsValue, set: impl FnOnce(::wasm_bindgen::JsValue)) {
-              let new = self.to_js();
-              if old != &new {
-                  set(new);
-              }
+        fn patch_js(&self, old: &::wasm_bindgen::JsValue, set: impl FnOnce(::wasm_bindgen::JsValue)) {
+          let new = self.to_js();
+          if old != &new {
+            set(new);
           }
+        }
       }
     }
     Tagging::Internal { tag } => int_tagged_patch_js(e, tag),
@@ -471,7 +471,7 @@ fn ext_tagged_to_js_arms(e: &SchemaEnum) -> impl Iterator<Item = TokenStream> + 
 
     match &v.kind {
       VariantKind::Unit => Some(quote! {
-          #name::#vname => ::wasm_bindgen::JsValue::from_str(#tag_str),
+        #name::#vname => ::wasm_bindgen::JsValue::from_str(#tag_str),
       }),
       VariantKind::Unnamed(types) => {
         let binds: Vec<_> = (0..types.len()).map(|i| format_ident!("__f{i}")).collect();
@@ -481,35 +481,35 @@ fn ext_tagged_to_js_arms(e: &SchemaEnum) -> impl Iterator<Item = TokenStream> + 
         } else {
           let pushes = binds.iter().map(|b| quote! { arr.push(&::typewire::Typewire::to_js(#b)); });
           quote! {
-              { let arr = ::js_sys::Array::new(); #(#pushes)* arr.into() }
+            { let arr = ::js_sys::Array::new(); #(#pushes)* arr.into() }
           }
         };
         Some(quote! {
-            #name::#vname(#(#binds),*) => {
-                let obj = ::js_sys::Object::new();
-                let _ = ::js_sys::Reflect::set(
-                    &obj,
-                    &::wasm_bindgen::JsValue::from_str(#tag_str),
-                    &#content,
-                );
-                obj.into()
-            }
+          #name::#vname(#(#binds),*) => {
+            let obj = ::js_sys::Object::new();
+            let _ = ::js_sys::Reflect::set(
+              &obj,
+              &::wasm_bindgen::JsValue::from_str(#tag_str),
+              &#content,
+            );
+            obj.into()
+          }
         })
       }
       VariantKind::Named(fields) => {
         let (binds, setters) = named_fields_to_js(fields);
         Some(quote! {
-            #name::#vname { #(#binds,)* .. } => {
-                let obj = ::js_sys::Object::new();
-                #(#setters)*
-                let __wrapper = ::js_sys::Object::new();
-                let _ = ::js_sys::Reflect::set(
-                    &__wrapper,
-                    &::wasm_bindgen::JsValue::from_str(#tag_str),
-                    &obj,
-                );
-                __wrapper.into()
-            }
+          #name::#vname { #(#binds,)* .. } => {
+            let obj = ::js_sys::Object::new();
+            #(#setters)*
+            let __wrapper = ::js_sys::Object::new();
+            let _ = ::js_sys::Reflect::set(
+              &__wrapper,
+              &::wasm_bindgen::JsValue::from_str(#tag_str),
+              &obj,
+            );
+            __wrapper.into()
+          }
         })
       }
     }
@@ -519,14 +519,14 @@ fn ext_tagged_to_js_arms(e: &SchemaEnum) -> impl Iterator<Item = TokenStream> + 
 fn ext_tagged_to_js(e: &SchemaEnum) -> TokenStream {
   let to_js_arms = ext_tagged_to_js_arms(e);
   quote! {
-      match self {
-          #(#to_js_arms)*
-          #[cfg_attr(
-              not(target_arch = "wasm32"),
-              expect(unreachable_patterns, reason = "wasm-only variants may be skipped")
-          )]
-          _ => ::wasm_bindgen::JsValue::UNDEFINED,
-      }
+    match self {
+      #(#to_js_arms)*
+      #[cfg_attr(
+        not(target_arch = "wasm32"),
+        expect(unreachable_patterns, reason = "wasm-only variants may be skipped")
+      )]
+      _ => ::wasm_bindgen::JsValue::UNDEFINED,
+    }
   }
 }
 
@@ -548,18 +548,18 @@ fn ext_tagged_from_js(e: &SchemaEnum) -> TokenStream {
 
       match &v.kind {
         VariantKind::Unit => quote! {
-            #(#all_names)|* => return Ok(#name::#vname),
+          #(#all_names)|* => return Ok(#name::#vname),
         },
         VariantKind::Unnamed(types) => {
           let body = unnamed_variant_from_js_ext(name, vname, types, tag_str);
           quote! {
-              #(#all_names)|* => { return { #body }; }
+            #(#all_names)|* => { return { #body }; }
           }
         }
         VariantKind::Named(fields) => {
           let body = named_variant_from_js_ext(name, vname, fields, tag_str);
           quote! {
-              #(#all_names)|* => { return { #body }; }
+            #(#all_names)|* => { return { #body }; }
           }
         }
       }
@@ -595,34 +595,34 @@ fn ext_tagged_from_js(e: &SchemaEnum) -> TokenStream {
       .collect();
 
     quote! {
-        if let Some(s) = value.as_string() {
-            match s.as_str() {
-                #(#unit_arms)*
-                _ => {}
-            }
+      if let Some(s) = value.as_string() {
+        match s.as_str() {
+          #(#unit_arms)*
+          _ => {}
         }
-        if let Some(__obj) = value.dyn_ref::<::js_sys::Object>() {
-            let keys = ::js_sys::Object::keys(__obj);
-            for __i in 0..keys.length() {
-                if let Some(tag) = keys.get(__i).as_string() {
-                    match tag.as_str() {
-                        #(#from_js_arms)*
-                        _ => continue,
-                    }
-                }
+      }
+      if let Some(__obj) = value.dyn_ref::<::js_sys::Object>() {
+        let keys = ::js_sys::Object::keys(__obj);
+        for __i in 0..keys.length() {
+          if let Some(tag) = keys.get(__i).as_string() {
+            match tag.as_str() {
+              #(#from_js_arms)*
+              _ => continue,
             }
+          }
         }
-        #(#untagged_fallbacks)*
-        #final_err
+      }
+      #(#untagged_fallbacks)*
+      #final_err
     }
   } else if all_unit {
     quote! {
-        let s = value.as_string()
-            .ok_or(::typewire::Error::UnexpectedType { expected: "string" })?;
-        match s.as_str() {
-            #(#from_js_arms)*
-            other => Err(::typewire::Error::UnknownVariant { variant: other.into() }),
-        }
+      let s = value.as_string()
+        .ok_or(::typewire::Error::UnexpectedType { expected: "string" })?;
+      match s.as_str() {
+        #(#from_js_arms)*
+        other => Err(::typewire::Error::UnknownVariant { variant: other.into() }),
+      }
     }
   } else {
     let unit_arms: Vec<_> = e
@@ -636,26 +636,26 @@ fn ext_tagged_from_js(e: &SchemaEnum) -> TokenStream {
       })
       .collect();
     quote! {
-        if let Some(s) = value.as_string() {
-            match s.as_str() {
-                #(#unit_arms)*
-                other => return Err(::typewire::Error::UnknownVariant { variant: other.into() }),
-            }
+      if let Some(s) = value.as_string() {
+        match s.as_str() {
+          #(#unit_arms)*
+          other => return Err(::typewire::Error::UnknownVariant { variant: other.into() }),
         }
-        let __obj = value.dyn_ref::<::js_sys::Object>()
-            .ok_or(::typewire::Error::UnexpectedType { expected: "object or string" })?;
-        let keys = ::js_sys::Object::keys(__obj);
-        for __i in 0..keys.length() {
-            if let Some(tag) = keys.get(__i).as_string() {
-                match tag.as_str() {
-                    #(#from_js_arms)*
-                    _ => continue,
-                }
-            }
+      }
+      let __obj = value.dyn_ref::<::js_sys::Object>()
+        .ok_or(::typewire::Error::UnexpectedType { expected: "object or string" })?;
+      let keys = ::js_sys::Object::keys(__obj);
+      for __i in 0..keys.length() {
+        if let Some(tag) = keys.get(__i).as_string() {
+          match tag.as_str() {
+            #(#from_js_arms)*
+            _ => continue,
+          }
         }
-        Err(::typewire::Error::UnknownVariant {
-            variant: keys.get(0).as_string().unwrap_or_default(),
-        })
+      }
+      Err(::typewire::Error::UnknownVariant {
+        variant: keys.get(0).as_string().unwrap_or_default(),
+      })
     }
   }
 }
@@ -674,64 +674,64 @@ fn ext_tagged_patch_js(e: &SchemaEnum) -> TokenStream {
 
       match &v.kind {
         VariantKind::Unit => Some(quote! {
-            #name::#vname => {
-                if !old.as_string().is_some_and(|s| s == #tag_val) {
-                    _set(self.to_js());
-                }
+          #name::#vname => {
+            if !old.as_string().is_some_and(|s| s == #tag_val) {
+              _set(self.to_js());
             }
+          }
         }),
         VariantKind::Named(fields) => {
           let binds = field_binds(fields);
           let patches = patch_bound_fields(fields, &quote! { __content });
           Some(quote! {
-              #name::#vname { #(#binds,)* .. } => {
-                  let __key = ::wasm_bindgen::JsValue::from_str(#tag_val);
-                  let __content = ::js_sys::Reflect::get(old, &__key)
-                      .unwrap_or(::wasm_bindgen::JsValue::UNDEFINED);
-                  if __content.is_undefined() {
-                      _set(self.to_js());
-                  } else {
-                      #(#patches)*
-                  }
+            #name::#vname { #(#binds,)* .. } => {
+              let __key = ::wasm_bindgen::JsValue::from_str(#tag_val);
+              let __content = ::js_sys::Reflect::get(old, &__key)
+                .unwrap_or(::wasm_bindgen::JsValue::UNDEFINED);
+              if __content.is_undefined() {
+                _set(self.to_js());
+              } else {
+                #(#patches)*
               }
+            }
           })
         }
         VariantKind::Unnamed(types) if types.len() == 1 => {
           let ty = &types[0];
           Some(quote! {
-              #name::#vname(__inner) => {
-                  let __key = ::wasm_bindgen::JsValue::from_str(#tag_val);
-                  let __content = ::js_sys::Reflect::get(old, &__key)
-                      .unwrap_or(::wasm_bindgen::JsValue::UNDEFINED);
-                  if __content.is_undefined() {
-                      _set(self.to_js());
-                  } else {
-                      <#ty as ::typewire::Typewire>::patch_js(__inner, &__content, |v| {
-                          let _ = ::js_sys::Reflect::set(old, &__key, &v);
-                      });
-                  }
+            #name::#vname(__inner) => {
+              let __key = ::wasm_bindgen::JsValue::from_str(#tag_val);
+              let __content = ::js_sys::Reflect::get(old, &__key)
+                .unwrap_or(::wasm_bindgen::JsValue::UNDEFINED);
+              if __content.is_undefined() {
+                _set(self.to_js());
+              } else {
+                <#ty as ::typewire::Typewire>::patch_js(__inner, &__content, |v| {
+                  let _ = ::js_sys::Reflect::set(old, &__key, &v);
+                });
               }
+            }
           })
         }
         VariantKind::Unnamed(_) => Some(quote! {
-            #name::#vname(..) => { _set(self.to_js()); }
+          #name::#vname(..) => { _set(self.to_js()); }
         }),
       }
     })
     .collect();
 
   quote! {
-      fn patch_js(&self, old: &::wasm_bindgen::JsValue, _set: impl FnOnce(::wasm_bindgen::JsValue)) {
-          if old.is_undefined() || old.is_null() {
-              _set(self.to_js());
-              return;
-          }
-          match self {
-              #(#arms)*
-              #[allow(unreachable_patterns)]
-              _ => { _set(self.to_js()); }
-          }
+    fn patch_js(&self, old: &::wasm_bindgen::JsValue, _set: impl FnOnce(::wasm_bindgen::JsValue)) {
+      if old.is_undefined() || old.is_null() {
+        _set(self.to_js());
+        return;
       }
+      match self {
+        #(#arms)*
+        #[allow(unreachable_patterns)]
+        _ => { _set(self.to_js()); }
+      }
+    }
   }
 }
 
@@ -753,41 +753,41 @@ fn int_tagged_to_js_arms<'a>(
 
     match &v.kind {
       VariantKind::Unit => Some(quote! {
-          #name::#vname => {
-              let obj = ::js_sys::Object::new();
-              let _ = ::js_sys::Reflect::set(
-                  &obj,
-                  &::wasm_bindgen::JsValue::from_str(#tag),
-                  &::wasm_bindgen::JsValue::from_str(#tag_val),
-              );
-              obj.into()
-          }
+        #name::#vname => {
+          let obj = ::js_sys::Object::new();
+          let _ = ::js_sys::Reflect::set(
+            &obj,
+            &::wasm_bindgen::JsValue::from_str(#tag),
+            &::wasm_bindgen::JsValue::from_str(#tag_val),
+          );
+          obj.into()
+        }
       }),
       VariantKind::Named(fields) => {
         let (binds, setters) = named_fields_to_js(fields);
         Some(quote! {
-            #name::#vname { #(#binds,)* .. } => {
-                let obj = ::js_sys::Object::new();
-                let _ = ::js_sys::Reflect::set(
-                    &obj,
-                    &::wasm_bindgen::JsValue::from_str(#tag),
-                    &::wasm_bindgen::JsValue::from_str(#tag_val),
-                );
-                #(#setters)*
-                obj.into()
-            }
+          #name::#vname { #(#binds,)* .. } => {
+            let obj = ::js_sys::Object::new();
+            let _ = ::js_sys::Reflect::set(
+              &obj,
+              &::wasm_bindgen::JsValue::from_str(#tag),
+              &::wasm_bindgen::JsValue::from_str(#tag_val),
+            );
+            #(#setters)*
+            obj.into()
+          }
         })
       }
       VariantKind::Unnamed(types) if types.len() == 1 => Some(quote! {
-          #name::#vname(__inner) => {
-              let obj_val = ::typewire::Typewire::to_js(__inner);
-              let _ = ::js_sys::Reflect::set(
-                  &obj_val,
-                  &::wasm_bindgen::JsValue::from_str(#tag),
-                  &::wasm_bindgen::JsValue::from_str(#tag_val),
-              );
-              obj_val
-          }
+        #name::#vname(__inner) => {
+          let obj_val = ::typewire::Typewire::to_js(__inner);
+          let _ = ::js_sys::Reflect::set(
+            &obj_val,
+            &::wasm_bindgen::JsValue::from_str(#tag),
+            &::wasm_bindgen::JsValue::from_str(#tag_val),
+          );
+          obj_val
+        }
       }),
       // Multi-field tuple variants are rejected by analyze's validation.
       VariantKind::Unnamed(_) => None,
@@ -798,14 +798,14 @@ fn int_tagged_to_js_arms<'a>(
 fn int_tagged_to_js(e: &SchemaEnum, tag: &str) -> TokenStream {
   let to_js_arms = int_tagged_to_js_arms(e, tag);
   quote! {
-      match self {
-          #(#to_js_arms)*
-          #[cfg_attr(
-              not(target_arch = "wasm32"),
-              expect(unreachable_patterns, reason = "wasm-only variants may be skipped")
-          )]
-          _ => ::wasm_bindgen::JsValue::UNDEFINED,
-      }
+    match self {
+      #(#to_js_arms)*
+      #[cfg_attr(
+        not(target_arch = "wasm32"),
+        expect(unreachable_patterns, reason = "wasm-only variants may be skipped")
+      )]
+      _ => ::wasm_bindgen::JsValue::UNDEFINED,
+    }
   }
 }
 
@@ -826,21 +826,21 @@ fn int_tagged_from_js(e: &SchemaEnum, tag: &str) -> TokenStream {
 
       match &v.kind {
         VariantKind::Unit => Some(quote! {
-            #(#all_names)|* => return Ok(#name::#vname),
+          #(#all_names)|* => return Ok(#name::#vname),
         }),
         VariantKind::Named(fields) => {
           let body = named_fields_from_js_obj(name, vname, fields);
           Some(quote! {
-              #(#all_names)|* => { return { #body }; }
+            #(#all_names)|* => { return { #body }; }
           })
         }
         VariantKind::Unnamed(types) if types.len() == 1 => {
           let ty = &types[0];
           Some(quote! {
-              #(#all_names)|* => {
-                  let inner = <#ty as ::typewire::Typewire>::from_js(value)?;
-                  return Ok(#name::#vname(inner));
-              }
+            #(#all_names)|* => {
+              let inner = <#ty as ::typewire::Typewire>::from_js(value)?;
+              return Ok(#name::#vname(inner));
+            }
           })
         }
         VariantKind::Unnamed(_) => None,
@@ -860,28 +860,28 @@ fn int_tagged_from_js(e: &SchemaEnum, tag: &str) -> TokenStream {
     };
 
     quote! {
-        let __tag_val = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#tag))
-            .ok()
-            .and_then(|v| v.as_string());
-        if let Some(ref tag_val) = __tag_val {
-            match tag_val.as_str() {
-                #(#from_js_arms)*
-                _ => {}
-            }
+      let __tag_val = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#tag))
+        .ok()
+        .and_then(|v| v.as_string());
+      if let Some(ref tag_val) = __tag_val {
+        match tag_val.as_str() {
+          #(#from_js_arms)*
+          _ => {}
         }
-        #(#untagged_fallbacks)*
-        #final_err
+      }
+      #(#untagged_fallbacks)*
+      #final_err
     }
   } else {
     quote! {
-        let tag_val = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#tag))
-            .ok()
-            .and_then(|v| v.as_string())
-            .ok_or(::typewire::Error::MissingField { field: #tag })?;
-        match tag_val.as_str() {
-            #(#from_js_arms)*
-            other => Err(::typewire::Error::UnknownVariant { variant: other.into() }),
-        }
+      let tag_val = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#tag))
+        .ok()
+        .and_then(|v| v.as_string())
+        .ok_or(::typewire::Error::MissingField { field: #tag })?;
+      match tag_val.as_str() {
+        #(#from_js_arms)*
+        other => Err(::typewire::Error::UnknownVariant { variant: other.into() }),
+      }
     }
   }
 }
@@ -900,59 +900,59 @@ fn int_tagged_patch_js(e: &SchemaEnum, tag: &str) -> TokenStream {
 
       match &v.kind {
         VariantKind::Unit => Some(quote! {
-            #name::#vname => {
-                if __old_tag.as_deref() != Some(#tag_val) {
-                    _set(self.to_js());
-                }
+          #name::#vname => {
+            if __old_tag.as_deref() != Some(#tag_val) {
+              _set(self.to_js());
             }
+          }
         }),
         VariantKind::Named(fields) => {
           let binds = field_binds(fields);
           let patches = patch_bound_fields(fields, &quote! { old });
           Some(quote! {
-              #name::#vname { #(#binds,)* .. } => {
-                  if __old_tag.as_deref() != Some(#tag_val) {
-                      _set(self.to_js());
-                  } else {
-                      #(#patches)*
-                  }
+            #name::#vname { #(#binds,)* .. } => {
+              if __old_tag.as_deref() != Some(#tag_val) {
+                _set(self.to_js());
+              } else {
+                #(#patches)*
               }
+            }
           })
         }
         VariantKind::Unnamed(types) if types.len() == 1 => {
           let ty = &types[0];
           Some(quote! {
-              #name::#vname(__inner) => {
-                  if __old_tag.as_deref() != Some(#tag_val) {
-                      _set(self.to_js());
-                  } else {
-                      <#ty as ::typewire::Typewire>::patch_js(__inner, old, |v| _set(v));
-                  }
+            #name::#vname(__inner) => {
+              if __old_tag.as_deref() != Some(#tag_val) {
+                _set(self.to_js());
+              } else {
+                <#ty as ::typewire::Typewire>::patch_js(__inner, old, |v| _set(v));
               }
+            }
           })
         }
         VariantKind::Unnamed(_) => Some(quote! {
-            #name::#vname(..) => { _set(self.to_js()); }
+          #name::#vname(..) => { _set(self.to_js()); }
         }),
       }
     })
     .collect();
 
   quote! {
-      fn patch_js(&self, old: &::wasm_bindgen::JsValue, _set: impl FnOnce(::wasm_bindgen::JsValue)) {
-          if old.is_undefined() || old.is_null() {
-              _set(self.to_js());
-              return;
-          }
-          let __old_tag = ::js_sys::Reflect::get(old, &::wasm_bindgen::JsValue::from_str(#tag))
-              .ok()
-              .and_then(|v| v.as_string());
-          match self {
-              #(#arms)*
-              #[allow(unreachable_patterns)]
-              _ => { _set(self.to_js()); }
-          }
+    fn patch_js(&self, old: &::wasm_bindgen::JsValue, _set: impl FnOnce(::wasm_bindgen::JsValue)) {
+      if old.is_undefined() || old.is_null() {
+        _set(self.to_js());
+        return;
       }
+      let __old_tag = ::js_sys::Reflect::get(old, &::wasm_bindgen::JsValue::from_str(#tag))
+        .ok()
+        .and_then(|v| v.as_string());
+      match self {
+        #(#arms)*
+        #[allow(unreachable_patterns)]
+        _ => { _set(self.to_js()); }
+      }
+    }
   }
 }
 
@@ -975,15 +975,15 @@ fn adj_tagged_to_js_arms<'a>(
 
     match &v.kind {
       VariantKind::Unit => Some(quote! {
-          #name::#vname => {
-              let obj = ::js_sys::Object::new();
-              let _ = ::js_sys::Reflect::set(
-                  &obj,
-                  &::wasm_bindgen::JsValue::from_str(#tag),
-                  &::wasm_bindgen::JsValue::from_str(#tag_val),
-              );
-              obj.into()
-          }
+        #name::#vname => {
+          let obj = ::js_sys::Object::new();
+          let _ = ::js_sys::Reflect::set(
+            &obj,
+            &::wasm_bindgen::JsValue::from_str(#tag),
+            &::wasm_bindgen::JsValue::from_str(#tag_val),
+          );
+          obj.into()
+        }
       }),
       VariantKind::Unnamed(types) => {
         let binds: Vec<_> = (0..types.len()).map(|i| format_ident!("__f{i}")).collect();
@@ -995,41 +995,41 @@ fn adj_tagged_to_js_arms<'a>(
           quote! { { let arr = ::js_sys::Array::new(); #(#pushes)* arr.into() } }
         };
         Some(quote! {
-            #name::#vname(#(#binds),*) => {
-                let obj = ::js_sys::Object::new();
-                let _ = ::js_sys::Reflect::set(
-                    &obj,
-                    &::wasm_bindgen::JsValue::from_str(#tag),
-                    &::wasm_bindgen::JsValue::from_str(#tag_val),
-                );
-                let _ = ::js_sys::Reflect::set(
-                    &obj,
-                    &::wasm_bindgen::JsValue::from_str(#content),
-                    &#content_val,
-                );
-                obj.into()
-            }
+          #name::#vname(#(#binds),*) => {
+            let obj = ::js_sys::Object::new();
+            let _ = ::js_sys::Reflect::set(
+              &obj,
+              &::wasm_bindgen::JsValue::from_str(#tag),
+              &::wasm_bindgen::JsValue::from_str(#tag_val),
+            );
+            let _ = ::js_sys::Reflect::set(
+              &obj,
+              &::wasm_bindgen::JsValue::from_str(#content),
+              &#content_val,
+            );
+            obj.into()
+          }
         })
       }
       VariantKind::Named(fields) => {
         let (binds, setters) = named_fields_to_js(fields);
         Some(quote! {
-            #name::#vname { #(#binds,)* .. } => {
-                let obj = ::js_sys::Object::new();
-                #(#setters)*
-                let __wrapper = ::js_sys::Object::new();
-                let _ = ::js_sys::Reflect::set(
-                    &__wrapper,
-                    &::wasm_bindgen::JsValue::from_str(#tag),
-                    &::wasm_bindgen::JsValue::from_str(#tag_val),
-                );
-                let _ = ::js_sys::Reflect::set(
-                    &__wrapper,
-                    &::wasm_bindgen::JsValue::from_str(#content),
-                    &obj,
-                );
-                __wrapper.into()
-            }
+          #name::#vname { #(#binds,)* .. } => {
+            let obj = ::js_sys::Object::new();
+            #(#setters)*
+            let __wrapper = ::js_sys::Object::new();
+            let _ = ::js_sys::Reflect::set(
+              &__wrapper,
+              &::wasm_bindgen::JsValue::from_str(#tag),
+              &::wasm_bindgen::JsValue::from_str(#tag_val),
+            );
+            let _ = ::js_sys::Reflect::set(
+              &__wrapper,
+              &::wasm_bindgen::JsValue::from_str(#content),
+              &obj,
+            );
+            __wrapper.into()
+          }
         })
       }
     }
@@ -1039,14 +1039,14 @@ fn adj_tagged_to_js_arms<'a>(
 fn adj_tagged_to_js(e: &SchemaEnum, tag: &str, content: &str) -> TokenStream {
   let to_js_arms = adj_tagged_to_js_arms(e, tag, content);
   quote! {
-      match self {
-          #(#to_js_arms)*
-          #[cfg_attr(
-              not(target_arch = "wasm32"),
-              expect(unreachable_patterns, reason = "wasm-only variants may be skipped")
-          )]
-          _ => ::wasm_bindgen::JsValue::UNDEFINED,
-      }
+    match self {
+      #(#to_js_arms)*
+      #[cfg_attr(
+        not(target_arch = "wasm32"),
+        expect(unreachable_patterns, reason = "wasm-only variants may be skipped")
+      )]
+      _ => ::wasm_bindgen::JsValue::UNDEFINED,
+    }
   }
 }
 
@@ -1054,65 +1054,65 @@ fn adj_tagged_from_js(e: &SchemaEnum, tag: &str, content: &str) -> TokenStream {
   let name = &e.ident;
 
   let from_js_arms: Vec<_> = e
-        .variants
-        .iter()
-        .filter(|v| {
-            !v.flags.contains(VariantFlags::SKIP_DE)
-                && !v.flags.contains(VariantFlags::UNTAGGED)
-                && !v.flags.contains(VariantFlags::OTHER)
-        })
-        .map(|v| {
-            let all_names = &v.all_wire_names;
-            let vname = &v.ident;
+    .variants
+    .iter()
+    .filter(|v| {
+      !v.flags.contains(VariantFlags::SKIP_DE)
+        && !v.flags.contains(VariantFlags::UNTAGGED)
+        && !v.flags.contains(VariantFlags::OTHER)
+    })
+    .map(|v| {
+      let all_names = &v.all_wire_names;
+      let vname = &v.ident;
 
-            match &v.kind {
-                VariantKind::Unit => quote! {
-                    #(#all_names)|* => return Ok(#name::#vname),
-                },
-                VariantKind::Unnamed(types) if types.len() == 1 => {
-                    let ty = &types[0];
-                    quote! {
-                        #(#all_names)|* => {
-                            let c = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#content))
-                                .map_err(|_| ::typewire::Error::MissingField { field: #content })?;
-                            let inner = <#ty as ::typewire::Typewire>::from_js(c)?;
-                            return Ok(#name::#vname(inner));
-                        }
-                    }
-                }
-                VariantKind::Unnamed(types) => {
-                    let bindings = types.iter().enumerate().map(|(i, ty)| {
-                        let var = format_ident!("__f{i}");
-                        let idx = u32::try_from(i).unwrap();
-                        quote! { let #var = <#ty as ::typewire::Typewire>::from_js(arr.get(#idx))?; }
-                    });
-                    let vars: Vec<_> = (0..types.len())
-                        .map(|i| format_ident!("__f{i}"))
-                        .collect();
-                    quote! {
-                        #(#all_names)|* => {
-                            let c = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#content))
-                                .map_err(|_| ::typewire::Error::MissingField { field: #content })?;
-                            let arr: ::js_sys::Array = c.try_into()
-                                .map_err(|_| ::typewire::Error::UnexpectedType { expected: "array" })?;
-                            #(#bindings)*
-                            return Ok(#name::#vname(#(#vars),*));
-                        }
-                    }
-                }
-                VariantKind::Named(fields) => {
-                    let body = named_fields_from_js_obj(name, vname, fields);
-                    quote! {
-                        #(#all_names)|* => {
-                            let value = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#content))
-                                .map_err(|_| ::typewire::Error::MissingField { field: #content })?;
-                            return { #body };
-                        }
-                    }
-                }
+      match &v.kind {
+        VariantKind::Unit => quote! {
+          #(#all_names)|* => return Ok(#name::#vname),
+        },
+        VariantKind::Unnamed(types) if types.len() == 1 => {
+          let ty = &types[0];
+          quote! {
+            #(#all_names)|* => {
+              let c = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#content))
+                .map_err(|_| ::typewire::Error::MissingField { field: #content })?;
+              let inner = <#ty as ::typewire::Typewire>::from_js(c)?;
+              return Ok(#name::#vname(inner));
             }
-        })
-        .collect();
+          }
+        }
+        VariantKind::Unnamed(types) => {
+          let bindings = types.iter().enumerate().map(|(i, ty)| {
+            let var = format_ident!("__f{i}");
+            let idx = u32::try_from(i).unwrap();
+            quote! { let #var = <#ty as ::typewire::Typewire>::from_js(arr.get(#idx))?; }
+          });
+          let vars: Vec<_> = (0..types.len())
+            .map(|i| format_ident!("__f{i}"))
+            .collect();
+          quote! {
+            #(#all_names)|* => {
+              let c = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#content))
+                .map_err(|_| ::typewire::Error::MissingField { field: #content })?;
+              let arr: ::js_sys::Array = c.try_into()
+                .map_err(|_| ::typewire::Error::UnexpectedType { expected: "array" })?;
+              #(#bindings)*
+              return Ok(#name::#vname(#(#vars),*));
+            }
+          }
+        }
+        VariantKind::Named(fields) => {
+          let body = named_fields_from_js_obj(name, vname, fields);
+          quote! {
+            #(#all_names)|* => {
+              let value = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#content))
+                .map_err(|_| ::typewire::Error::MissingField { field: #content })?;
+              return { #body };
+            }
+          }
+        }
+      }
+    })
+    .collect();
 
   let untagged_fallbacks = untagged_variant_fallbacks(name, &e.variants);
   let other_fallback = other_variant_fallback(name, &e.variants);
@@ -1126,28 +1126,28 @@ fn adj_tagged_from_js(e: &SchemaEnum, tag: &str, content: &str) -> TokenStream {
     };
 
     quote! {
-        let __tag_val = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#tag))
-            .ok()
-            .and_then(|v| v.as_string());
-        if let Some(ref tag_val) = __tag_val {
-            match tag_val.as_str() {
-                #(#from_js_arms)*
-                _ => {}
-            }
+      let __tag_val = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#tag))
+        .ok()
+        .and_then(|v| v.as_string());
+      if let Some(ref tag_val) = __tag_val {
+        match tag_val.as_str() {
+          #(#from_js_arms)*
+          _ => {}
         }
-        #(#untagged_fallbacks)*
-        #final_err
+      }
+      #(#untagged_fallbacks)*
+      #final_err
     }
   } else {
     quote! {
-        let tag_val = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#tag))
-            .ok()
-            .and_then(|v| v.as_string())
-            .ok_or(::typewire::Error::MissingField { field: #tag })?;
-        match tag_val.as_str() {
-            #(#from_js_arms)*
-            other => Err(::typewire::Error::UnknownVariant { variant: other.into() }),
-        }
+      let tag_val = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#tag))
+        .ok()
+        .and_then(|v| v.as_string())
+        .ok_or(::typewire::Error::MissingField { field: #tag })?;
+      match tag_val.as_str() {
+        #(#from_js_arms)*
+        other => Err(::typewire::Error::UnknownVariant { variant: other.into() }),
+      }
     }
   }
 }
@@ -1155,79 +1155,79 @@ fn adj_tagged_from_js(e: &SchemaEnum, tag: &str, content: &str) -> TokenStream {
 fn adj_tagged_patch_js(e: &SchemaEnum, tag: &str, content: &str) -> TokenStream {
   let name = &e.ident;
   let arms: Vec<_> = e
-        .variants
-        .iter()
-        .filter_map(|v| {
-            if v.flags.contains(VariantFlags::SKIP_SER) {
-                return None;
-            }
-            let vname = &v.ident;
-            let tag_val = &v.wire_name;
+    .variants
+    .iter()
+    .filter_map(|v| {
+      if v.flags.contains(VariantFlags::SKIP_SER) {
+        return None;
+      }
+      let vname = &v.ident;
+      let tag_val = &v.wire_name;
 
-            match &v.kind {
-                VariantKind::Unit => Some(quote! {
-                    #name::#vname => {
-                        if __old_tag.as_deref() != Some(#tag_val) {
-                            _set(self.to_js());
-                        }
-                    }
-                }),
-                VariantKind::Named(fields) => {
-                    let content_str = content;
-                    let binds = field_binds(fields);
-                    let patches = patch_bound_fields(fields, &quote! { __content });
-                    Some(quote! {
-                        #name::#vname { #(#binds,)* .. } => {
-                            if __old_tag.as_deref() != Some(#tag_val) {
-                                _set(self.to_js());
-                            } else {
-                                let __content = ::js_sys::Reflect::get(old, &::wasm_bindgen::JsValue::from_str(#content_str))
-                                    .unwrap_or(::wasm_bindgen::JsValue::UNDEFINED);
-                                #(#patches)*
-                            }
-                        }
-                    })
-                }
-                VariantKind::Unnamed(types) if types.len() == 1 => {
-                    let ty = &types[0];
-                    let content_str = content;
-                    Some(quote! {
-                        #name::#vname(__inner) => {
-                            if __old_tag.as_deref() != Some(#tag_val) {
-                                _set(self.to_js());
-                            } else {
-                                let __content_key = ::wasm_bindgen::JsValue::from_str(#content_str);
-                                let __content = ::js_sys::Reflect::get(old, &__content_key)
-                                    .unwrap_or(::wasm_bindgen::JsValue::UNDEFINED);
-                                <#ty as ::typewire::Typewire>::patch_js(__inner, &__content, |v| {
-                                    let _ = ::js_sys::Reflect::set(old, &__content_key, &v);
-                                });
-                            }
-                        }
-                    })
-                }
-                VariantKind::Unnamed(_) => Some(quote! {
-                    #name::#vname(..) => { _set(self.to_js()); }
-                }),
+      match &v.kind {
+        VariantKind::Unit => Some(quote! {
+          #name::#vname => {
+            if __old_tag.as_deref() != Some(#tag_val) {
+              _set(self.to_js());
             }
-        })
-        .collect();
+          }
+        }),
+        VariantKind::Named(fields) => {
+          let content_str = content;
+          let binds = field_binds(fields);
+          let patches = patch_bound_fields(fields, &quote! { __content });
+          Some(quote! {
+            #name::#vname { #(#binds,)* .. } => {
+              if __old_tag.as_deref() != Some(#tag_val) {
+                _set(self.to_js());
+              } else {
+                let __content = ::js_sys::Reflect::get(old, &::wasm_bindgen::JsValue::from_str(#content_str))
+                  .unwrap_or(::wasm_bindgen::JsValue::UNDEFINED);
+                #(#patches)*
+              }
+            }
+          })
+        }
+        VariantKind::Unnamed(types) if types.len() == 1 => {
+          let ty = &types[0];
+          let content_str = content;
+          Some(quote! {
+            #name::#vname(__inner) => {
+              if __old_tag.as_deref() != Some(#tag_val) {
+                _set(self.to_js());
+              } else {
+                let __content_key = ::wasm_bindgen::JsValue::from_str(#content_str);
+                let __content = ::js_sys::Reflect::get(old, &__content_key)
+                  .unwrap_or(::wasm_bindgen::JsValue::UNDEFINED);
+                <#ty as ::typewire::Typewire>::patch_js(__inner, &__content, |v| {
+                  let _ = ::js_sys::Reflect::set(old, &__content_key, &v);
+                });
+              }
+            }
+          })
+        }
+        VariantKind::Unnamed(_) => Some(quote! {
+          #name::#vname(..) => { _set(self.to_js()); }
+        }),
+      }
+    })
+    .collect();
 
   quote! {
-      fn patch_js(&self, old: &::wasm_bindgen::JsValue, _set: impl FnOnce(::wasm_bindgen::JsValue)) {
-          if old.is_undefined() || old.is_null() {
-              _set(self.to_js());
-              return;
-          }
-          let __old_tag = ::js_sys::Reflect::get(old, &::wasm_bindgen::JsValue::from_str(#tag))
-              .ok()
-              .and_then(|v| v.as_string());
-          match self {
-              #(#arms)*
-              #[allow(unreachable_patterns)]
-              _ => { _set(self.to_js()); }
-          }
+    fn patch_js(&self, old: &::wasm_bindgen::JsValue, _set: impl FnOnce(::wasm_bindgen::JsValue)) {
+      if old.is_undefined() || old.is_null() {
+        _set(self.to_js());
+        return;
       }
+      let __old_tag = ::js_sys::Reflect::get(old, &::wasm_bindgen::JsValue::from_str(#tag))
+        .ok()
+        .and_then(|v| v.as_string());
+      match self {
+        #(#arms)*
+        #[allow(unreachable_patterns)]
+        _ => { _set(self.to_js()); }
+      }
+    }
   }
 }
 
@@ -1245,30 +1245,30 @@ fn untagged_to_js_arms(e: &SchemaEnum) -> impl Iterator<Item = TokenStream> + '_
 
     match &v.kind {
       VariantKind::Unit => Some(quote! {
-          #name::#vname => ::wasm_bindgen::JsValue::NULL,
+        #name::#vname => ::wasm_bindgen::JsValue::NULL,
       }),
       VariantKind::Unnamed(types) if types.len() == 1 => Some(quote! {
-          #name::#vname(__inner) => ::typewire::Typewire::to_js(__inner),
+        #name::#vname(__inner) => ::typewire::Typewire::to_js(__inner),
       }),
       VariantKind::Unnamed(types) => {
         let binds: Vec<_> = (0..types.len()).map(|i| format_ident!("__f{i}")).collect();
         let pushes = binds.iter().map(|b| quote! { arr.push(&::typewire::Typewire::to_js(#b)); });
         Some(quote! {
-            #name::#vname(#(#binds),*) => {
-                let arr = ::js_sys::Array::new();
-                #(#pushes)*
-                arr.into()
-            }
+          #name::#vname(#(#binds),*) => {
+            let arr = ::js_sys::Array::new();
+            #(#pushes)*
+            arr.into()
+          }
         })
       }
       VariantKind::Named(fields) => {
         let (binds, setters) = named_fields_to_js(fields);
         Some(quote! {
-            #name::#vname { #(#binds,)* .. } => {
-                let obj = ::js_sys::Object::new();
-                #(#setters)*
-                obj.into()
-            }
+          #name::#vname { #(#binds,)* .. } => {
+            let obj = ::js_sys::Object::new();
+            #(#setters)*
+            obj.into()
+          }
         })
       }
     }
@@ -1278,14 +1278,14 @@ fn untagged_to_js_arms(e: &SchemaEnum) -> impl Iterator<Item = TokenStream> + '_
 fn untagged_to_js(e: &SchemaEnum) -> TokenStream {
   let to_js_arms = untagged_to_js_arms(e);
   quote! {
-      match self {
-          #(#to_js_arms)*
-          #[cfg_attr(
-              not(target_arch = "wasm32"),
-              expect(unreachable_patterns, reason = "wasm-only variants may be skipped")
-          )]
-          _ => ::wasm_bindgen::JsValue::UNDEFINED,
-      }
+    match self {
+      #(#to_js_arms)*
+      #[cfg_attr(
+        not(target_arch = "wasm32"),
+        expect(unreachable_patterns, reason = "wasm-only variants may be skipped")
+      )]
+      _ => ::wasm_bindgen::JsValue::UNDEFINED,
+    }
   }
 }
 
@@ -1293,67 +1293,65 @@ fn untagged_from_js(e: &SchemaEnum) -> TokenStream {
   let name = &e.ident;
 
   let from_js_attempts: Vec<_> = e
-        .variants
-        .iter()
-        .filter(|v| !v.flags.contains(VariantFlags::SKIP_DE))
-        .map(|v| {
-            let vname = &v.ident;
+    .variants
+    .iter()
+    .filter(|v| !v.flags.contains(VariantFlags::SKIP_DE))
+    .map(|v| {
+      let vname = &v.ident;
 
-            match &v.kind {
-                VariantKind::Unit => quote! {
-                    if value.is_null() || value.is_undefined() {
-                        return Ok(#name::#vname);
-                    }
-                },
-                VariantKind::Unnamed(types) if types.len() == 1 => {
-                    let ty = &types[0];
-                    quote! {
-                        if let Ok(v) = <#ty as ::typewire::Typewire>::from_js(value.clone()) {
-                            return Ok(#name::#vname(v));
-                        }
-                    }
-                }
-                VariantKind::Unnamed(types) => {
-                    let len = types.len();
-                    let bindings = types.iter().enumerate().map(|(i, ty)| {
-                        let var = format_ident!("__f{i}");
-                        let idx = u32::try_from(i).unwrap();
-                        quote! { let #var = <#ty as ::typewire::Typewire>::from_js(arr.get(#idx))?; }
-                    });
-                    let vars: Vec<_> = (0..len)
-                        .map(|i| format_ident!("__f{i}"))
-                        .collect();
-                    let len_u32 = u32::try_from(len).unwrap();
-                    quote! {
-                        if let Ok(arr) = ::core::convert::TryInto::<::js_sys::Array>::try_into(value.clone()) {
-                            if arr.length() == #len_u32 {
-                                if let Ok(v) = (|| -> ::core::result::Result<#name, ::typewire::Error> {
-                                    #(#bindings)*
-                                    Ok(#name::#vname(#(#vars),*))
-                                })() {
-                                    return Ok(v);
-                                }
-                            }
-                        }
-                    }
-                }
-                VariantKind::Named(fields) => {
-                    let body = named_fields_from_js_obj(name, vname, fields);
-                    quote! {
-                        if let Ok(v) = (|| -> ::core::result::Result<#name, ::typewire::Error> {
-                            #body
-                        })() {
-                            return Ok(v);
-                        }
-                    }
-                }
+      match &v.kind {
+        VariantKind::Unit => quote! {
+          if value.is_null() || value.is_undefined() {
+            return Ok(#name::#vname);
+          }
+        },
+        VariantKind::Unnamed(types) if types.len() == 1 => {
+          let ty = &types[0];
+          quote! {
+            if let Ok(v) = <#ty as ::typewire::Typewire>::from_js(value.clone()) {
+              return Ok(#name::#vname(v));
             }
-        })
-        .collect();
+          }
+        }
+        VariantKind::Unnamed(types) => {
+          let len = types.len();
+          let bindings = types.iter().enumerate().map(|(i, ty)| {
+            let var = format_ident!("__f{i}");
+            let idx = u32::try_from(i).unwrap();
+            quote! { let #var = <#ty as ::typewire::Typewire>::from_js(arr.get(#idx))?; }
+          });
+          let vars: Vec<_> = (0..len).map(|i| format_ident!("__f{i}")).collect();
+          let len_u32 = u32::try_from(len).unwrap();
+          quote! {
+            if let Ok(arr) = ::core::convert::TryInto::<::js_sys::Array>::try_into(value.clone()) {
+              if arr.length() == #len_u32 {
+                if let Ok(v) = (|| -> ::core::result::Result<#name, ::typewire::Error> {
+                  #(#bindings)*
+                  Ok(#name::#vname(#(#vars),*))
+                })() {
+                  return Ok(v);
+                }
+              }
+            }
+          }
+        }
+        VariantKind::Named(fields) => {
+          let body = named_fields_from_js_obj(name, vname, fields);
+          quote! {
+            if let Ok(v) = (|| -> ::core::result::Result<#name, ::typewire::Error> {
+              #body
+            })() {
+              return Ok(v);
+            }
+          }
+        }
+      }
+    })
+    .collect();
 
   quote! {
-      #(#from_js_attempts)*
-      Err(::typewire::Error::NoMatchingVariant)
+    #(#from_js_attempts)*
+    Err(::typewire::Error::NoMatchingVariant)
   }
 }
 
@@ -1365,17 +1363,17 @@ fn untagged_from_js(e: &SchemaEnum) -> TokenStream {
 fn field_to_js_expr(ident: &TokenStream, f: &SchemaField) -> TokenStream {
   if f.flags.contains(FieldFlags::BASE64) {
     quote! {
-        ::wasm_bindgen::JsValue::from_str(
-            &::typewire::base64_encode(#ident)
-        )
+      ::wasm_bindgen::JsValue::from_str(
+        &::typewire::base64_encode(#ident)
+      )
     }
   } else if f.flags.contains(FieldFlags::DISPLAY) {
     quote! {
-        ::wasm_bindgen::JsValue::from_str(&::std::string::ToString::to_string(#ident))
+      ::wasm_bindgen::JsValue::from_str(&::std::string::ToString::to_string(#ident))
     }
   } else if f.flags.contains(FieldFlags::SERDE_BYTES) {
     quote! {
-        ::js_sys::Uint8Array::from((#ident).as_slice()).into()
+      ::js_sys::Uint8Array::from((#ident).as_slice()).into()
     }
   } else {
     quote! { ::typewire::Typewire::to_js(#ident) }
@@ -1391,50 +1389,50 @@ fn field_from_js_expr(f: &SchemaField) -> TokenStream {
 
   if f.flags.contains(FieldFlags::BASE64) {
     quote! {
-        (|| -> ::core::result::Result<_, ::typewire::Error> {
-            let s = v.as_string()
-                .ok_or(::typewire::Error::UnexpectedType { expected: "string" })?;
-            ::typewire::base64_decode(&s)
-                .map_err(|e| ::typewire::Error::InvalidValue {
-                    message: e.to_string(),
-                })
-        })().map_err(|e| e.in_context(#context))?
+      (|| -> ::core::result::Result<_, ::typewire::Error> {
+        let s = v.as_string()
+          .ok_or(::typewire::Error::UnexpectedType { expected: "string" })?;
+        ::typewire::base64_decode(&s)
+          .map_err(|e| ::typewire::Error::InvalidValue {
+            message: e.to_string(),
+          })
+      })().map_err(|e| e.in_context(#context))?
     }
   } else if f.flags.contains(FieldFlags::DISPLAY) {
     quote! {
-        (|| -> ::core::result::Result<_, ::typewire::Error> {
-            let s = v.as_string()
-                .ok_or(::typewire::Error::UnexpectedType { expected: "string" })?;
-            s.parse::<#ty>()
-                .map_err(|e| ::typewire::Error::InvalidValue {
-                    message: ::std::string::ToString::to_string(&e),
-                })
-        })().map_err(|e| e.in_context(#context))?
+      (|| -> ::core::result::Result<_, ::typewire::Error> {
+        let s = v.as_string()
+          .ok_or(::typewire::Error::UnexpectedType { expected: "string" })?;
+        s.parse::<#ty>()
+          .map_err(|e| ::typewire::Error::InvalidValue {
+            message: ::std::string::ToString::to_string(&e),
+          })
+      })().map_err(|e| e.in_context(#context))?
     }
   } else if f.flags.contains(FieldFlags::SERDE_BYTES) {
     quote! {
-        (|| -> ::core::result::Result<_, ::typewire::Error> {
-            use ::wasm_bindgen::JsCast as _;
-            if let Some(arr) = v.dyn_ref::<::js_sys::Uint8Array>() {
-                Ok(arr.to_vec())
-            } else if let Some(arr) = v.dyn_ref::<::js_sys::Uint8ClampedArray>() {
-                Ok(arr.to_vec())
-            } else {
-                Err(::typewire::Error::UnexpectedType {
-                    expected: "Uint8Array or Uint8ClampedArray",
-                })
-            }
-        })().map_err(|e| e.in_context(#context))?
+      (|| -> ::core::result::Result<_, ::typewire::Error> {
+        use ::wasm_bindgen::JsCast as _;
+        if let Some(arr) = v.dyn_ref::<::js_sys::Uint8Array>() {
+          Ok(arr.to_vec())
+        } else if let Some(arr) = v.dyn_ref::<::js_sys::Uint8ClampedArray>() {
+          Ok(arr.to_vec())
+        } else {
+          Err(::typewire::Error::UnexpectedType {
+            expected: "Uint8Array or Uint8ClampedArray",
+          })
+        }
+      })().map_err(|e| e.in_context(#context))?
     }
   } else if f.flags.contains(FieldFlags::LENIENT) {
     quote! {
-        <#ty as ::typewire::Typewire>::from_js_lenient(v, #js_key)
-            .map_err(|e| e.in_context(#context))?
+      <#ty as ::typewire::Typewire>::from_js_lenient(v, #js_key)
+        .map_err(|e| e.in_context(#context))?
     }
   } else {
     quote! {
-        <#ty as ::typewire::Typewire>::from_js(v)
-            .map_err(|e| e.in_context(#context))?
+      <#ty as ::typewire::Typewire>::from_js(v)
+        .map_err(|e| e.in_context(#context))?
     }
   }
 }
@@ -1458,34 +1456,34 @@ fn named_fields_to_js(fields: &[SchemaField]) -> (Vec<TokenStream>, Vec<TokenStr
 
     if f.flags.contains(FieldFlags::FLATTEN) {
       setters.push(quote! {
-          {
-              let inner = #to_js;
-              if let Some(inner_obj) = inner.dyn_ref::<::js_sys::Object>() {
-                  let entries = ::js_sys::Object::entries(inner_obj);
-                  for i in 0..entries.length() {
-                      let pair: ::js_sys::Array = entries.get(i).into();
-                      let _ = ::js_sys::Reflect::set(&obj, &pair.get(0), &pair.get(1));
-                  }
-              }
+        {
+          let inner = #to_js;
+          if let Some(inner_obj) = inner.dyn_ref::<::js_sys::Object>() {
+            let entries = ::js_sys::Object::entries(inner_obj);
+            for i in 0..entries.length() {
+              let pair: ::js_sys::Array = entries.get(i).into();
+              let _ = ::js_sys::Reflect::set(&obj, &pair.get(0), &pair.get(1));
+            }
           }
+        }
       });
     } else if let Some(ref pred_path) = f.skip_serializing_if {
       setters.push(quote! {
-          if !#pred_path(#ident) {
-              let _ = ::js_sys::Reflect::set(
-                  &obj,
-                  &::wasm_bindgen::JsValue::from_str(#js_key),
-                  &#to_js,
-              );
-          }
+        if !#pred_path(#ident) {
+          let _ = ::js_sys::Reflect::set(
+            &obj,
+            &::wasm_bindgen::JsValue::from_str(#js_key),
+            &#to_js,
+          );
+        }
       });
     } else {
       setters.push(quote! {
-          let _ = ::js_sys::Reflect::set(
-              &obj,
-              &::wasm_bindgen::JsValue::from_str(#js_key),
-              &#to_js,
-          );
+        let _ = ::js_sys::Reflect::set(
+          &obj,
+          &::wasm_bindgen::JsValue::from_str(#js_key),
+          &#to_js,
+        );
       });
     }
   }
@@ -1509,8 +1507,8 @@ fn named_field_bindings(fields: &[SchemaField]) -> Vec<TokenStream> {
         let ty = &f.ty;
         let field_str = ident.to_string();
         return quote! {
-            let #ident = <#ty as ::typewire::Typewire>::from_js((*__obj).clone())
-                .map_err(|e| e.in_context(#field_str))?;
+          let #ident = <#ty as ::typewire::Typewire>::from_js((*__obj).clone())
+            .map_err(|e| e.in_context(#field_str))?;
         };
       }
 
@@ -1519,28 +1517,28 @@ fn named_field_bindings(fields: &[SchemaField]) -> Vec<TokenStream> {
 
       let get_value = if f.aliases.is_empty() {
         quote! {
-            ::js_sys::Reflect::get(__obj, &::wasm_bindgen::JsValue::from_str(#js_key))
-                .ok()
+          ::js_sys::Reflect::get(__obj, &::wasm_bindgen::JsValue::from_str(#js_key))
+            .ok()
         }
       } else {
         let all_keys: Vec<&str> = std::iter::once(f.wire_name.as_str())
           .chain(f.aliases.iter().map(std::string::String::as_str))
           .collect();
         quote! {
-            {
-                let mut __val = None;
-                #(
-                    if __val.is_none() {
-                        __val = ::js_sys::Reflect::get(
-                            __obj,
-                            &::wasm_bindgen::JsValue::from_str(#all_keys),
-                        )
-                        .ok()
-                        .filter(|v| !v.is_undefined());
-                    }
-                )*
-                __val
-            }
+          {
+            let mut __val = None;
+            #(
+              if __val.is_none() {
+                __val = ::js_sys::Reflect::get(
+                  __obj,
+                  &::wasm_bindgen::JsValue::from_str(#all_keys),
+                )
+                .ok()
+                .filter(|v| !v.is_undefined());
+              }
+            )*
+            __val
+          }
         }
       };
 
@@ -1550,24 +1548,24 @@ fn named_field_bindings(fields: &[SchemaField]) -> Vec<TokenStream> {
       if has_default {
         let default_expr = default_expr_for_field(f);
         quote! {
-            let #ident = match #get_value {
-                Some(v) if !v.is_undefined() && !v.is_null() => {
-                    #from_js
-                }
-                _ => #default_expr,
-            };
+          let #ident = match #get_value {
+            Some(v) if !v.is_undefined() && !v.is_null() => {
+              #from_js
+            }
+            _ => #default_expr,
+          };
         }
       } else {
         quote! {
-            let #ident = match #get_value {
-                Some(v) if !v.is_undefined() => {
-                    #from_js
-                }
-                _ => match <#ty as ::typewire::Typewire>::or_default() {
-                    Some(d) => d,
-                    None => return Err(::typewire::Error::MissingField { field: #js_key }),
-                },
-            };
+          let #ident = match #get_value {
+            Some(v) if !v.is_undefined() => {
+              #from_js
+            }
+            _ => match <#ty as ::typewire::Typewire>::or_default() {
+              Some(d) => d,
+              None => return Err(::typewire::Error::MissingField { field: #js_key }),
+            },
+          };
         }
       }
     })
@@ -1583,9 +1581,9 @@ fn named_fields_from_js_obj(
   let field_bindings = named_field_bindings(fields);
   let field_names: Vec<_> = fields.iter().map(|f| &f.ident).collect();
   quote! {
-      let __obj = &value;
-      #(#field_bindings)*
-      Ok(#enum_name::#vname { #(#field_names,)* })
+    let __obj = &value;
+    #(#field_bindings)*
+    Ok(#enum_name::#vname { #(#field_names,)* })
   }
 }
 
@@ -1610,10 +1608,10 @@ fn unnamed_variant_from_js_ext(
   if types.len() == 1 {
     let ty = &types[0];
     quote! {
-        let c = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#tag_str))
-            .map_err(|_| ::typewire::Error::MissingField { field: #tag_str })?;
-        let inner = <#ty as ::typewire::Typewire>::from_js(c)?;
-        Ok(#enum_name::#vname(inner))
+      let c = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#tag_str))
+        .map_err(|_| ::typewire::Error::MissingField { field: #tag_str })?;
+      let inner = <#ty as ::typewire::Typewire>::from_js(c)?;
+      Ok(#enum_name::#vname(inner))
     }
   } else {
     let bindings = types.iter().enumerate().map(|(i, ty)| {
@@ -1623,12 +1621,12 @@ fn unnamed_variant_from_js_ext(
     });
     let vars: Vec<_> = (0..types.len()).map(|i| format_ident!("__f{i}")).collect();
     quote! {
-        let c = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#tag_str))
-            .map_err(|_| ::typewire::Error::MissingField { field: #tag_str })?;
-        let arr: ::js_sys::Array = c.try_into()
-            .map_err(|_| ::typewire::Error::UnexpectedType { expected: "array" })?;
-        #(#bindings)*
-        Ok(#enum_name::#vname(#(#vars),*))
+      let c = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#tag_str))
+        .map_err(|_| ::typewire::Error::MissingField { field: #tag_str })?;
+      let arr: ::js_sys::Array = c.try_into()
+        .map_err(|_| ::typewire::Error::UnexpectedType { expected: "array" })?;
+      #(#bindings)*
+      Ok(#enum_name::#vname(#(#vars),*))
     }
   }
 }
@@ -1642,9 +1640,9 @@ fn named_variant_from_js_ext(
 ) -> TokenStream {
   let body = named_fields_from_js_obj(enum_name, vname, fields);
   quote! {
-      let value = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#tag_str))
-          .map_err(|_| ::typewire::Error::MissingField { field: #tag_str })?;
-      #body
+    let value = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#tag_str))
+      .map_err(|_| ::typewire::Error::MissingField { field: #tag_str })?;
+    #body
   }
 }
 
@@ -1669,55 +1667,55 @@ fn patch_named_fields(
   field_ref: impl Fn(&Ident) -> TokenStream,
 ) -> Vec<TokenStream> {
   fields
-        .iter()
-        .filter_map(|f| {
-            if f.flags.contains(FieldFlags::SKIP_SER) && f.flags.contains(FieldFlags::SKIP_DE) {
-                return None;
+    .iter()
+    .filter_map(|f| {
+      if f.flags.contains(FieldFlags::SKIP_SER) && f.flags.contains(FieldFlags::SKIP_DE) {
+        return None;
+      }
+      let ident = &f.ident;
+      let js_key = &f.wire_name;
+      if f.flags.contains(FieldFlags::FLATTEN) {
+        let field_ts = field_ref(ident);
+        return Some(quote! {
+          ::typewire::Typewire::patch_js(
+            #field_ts,
+            &#obj,
+            |_| {},
+          );
+        });
+      }
+      let ident_ts = field_ref(ident);
+      let to_js = field_to_js_expr(&ident_ts, f);
+      let is_special = f.flags.intersects(
+        FieldFlags::BASE64 | FieldFlags::DISPLAY | FieldFlags::SERDE_BYTES,
+      );
+      let patch_call = if is_special {
+        quote! {
+          {
+            let __old_v = ::js_sys::Reflect::get(&#obj, &__k).unwrap_or(::wasm_bindgen::JsValue::UNDEFINED);
+            let __new_v = #to_js;
+            if __old_v != __new_v {
+              let _ = ::js_sys::Reflect::set(&#obj, &__k, &__new_v);
             }
-            let ident = &f.ident;
-            let js_key = &f.wire_name;
-            if f.flags.contains(FieldFlags::FLATTEN) {
-                let field_ts = field_ref(ident);
-                return Some(quote! {
-                    ::typewire::Typewire::patch_js(
-                        #field_ts,
-                        &#obj,
-                        |_| {},
-                    );
-                });
-            }
-            let ident_ts = field_ref(ident);
-            let to_js = field_to_js_expr(&ident_ts, f);
-            let is_special = f.flags.intersects(
-                FieldFlags::BASE64 | FieldFlags::DISPLAY | FieldFlags::SERDE_BYTES,
-            );
-            let patch_call = if is_special {
-                quote! {
-                    {
-                        let __old_v = ::js_sys::Reflect::get(&#obj, &__k).unwrap_or(::wasm_bindgen::JsValue::UNDEFINED);
-                        let __new_v = #to_js;
-                        if __old_v != __new_v {
-                            let _ = ::js_sys::Reflect::set(&#obj, &__k, &__new_v);
-                        }
-                    }
-                }
-            } else {
-                quote! {
-                    ::typewire::Typewire::patch_js(
-                        #ident_ts,
-                        &::js_sys::Reflect::get(&#obj, &__k).unwrap_or(::wasm_bindgen::JsValue::UNDEFINED),
-                        |v| { let _ = ::js_sys::Reflect::set(&#obj, &__k, &v); },
-                    );
-                }
-            };
-            Some(quote! {
-                {
-                    let __k = ::wasm_bindgen::JsValue::from_str(#js_key);
-                    #patch_call
-                }
-            })
-        })
-        .collect()
+          }
+        }
+      } else {
+        quote! {
+          ::typewire::Typewire::patch_js(
+            #ident_ts,
+            &::js_sys::Reflect::get(&#obj, &__k).unwrap_or(::wasm_bindgen::JsValue::UNDEFINED),
+            |v| { let _ = ::js_sys::Reflect::set(&#obj, &__k, &v); },
+          );
+        }
+      };
+      Some(quote! {
+        {
+          let __k = ::wasm_bindgen::JsValue::from_str(#js_key);
+          #patch_call
+        }
+      })
+    })
+    .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -1728,63 +1726,61 @@ fn patch_named_fields(
 /// within a tagged enum.
 fn untagged_variant_fallbacks(name: &Ident, variants: &[SchemaVariant]) -> Vec<TokenStream> {
   variants
-        .iter()
-        .filter(|v| {
-            v.flags.contains(VariantFlags::UNTAGGED) && !v.flags.contains(VariantFlags::SKIP_DE)
-        })
-        .map(|v| {
-            let vname = &v.ident;
+    .iter()
+    .filter(|v| {
+      v.flags.contains(VariantFlags::UNTAGGED) && !v.flags.contains(VariantFlags::SKIP_DE)
+    })
+    .map(|v| {
+      let vname = &v.ident;
 
-            match &v.kind {
-                VariantKind::Unit => quote! {
-                    if value.is_null() || value.is_undefined() {
-                        return Ok(#name::#vname);
-                    }
-                },
-                VariantKind::Unnamed(types) if types.len() == 1 => {
-                    let ty = &types[0];
-                    quote! {
-                        if let Ok(v) = <#ty as ::typewire::Typewire>::from_js(value.clone()) {
-                            return Ok(#name::#vname(v));
-                        }
-                    }
-                }
-                VariantKind::Unnamed(types) => {
-                    let len = u32::try_from(types.len()).unwrap();
-                    let bindings = types.iter().enumerate().map(|(i, ty)| {
-                        let var = format_ident!("__f{i}");
-                        let idx = u32::try_from(i).unwrap();
-                        quote! { let #var = <#ty as ::typewire::Typewire>::from_js(arr.get(#idx))?; }
-                    });
-                    let vars: Vec<_> = (0..types.len())
-                        .map(|i| format_ident!("__f{i}"))
-                        .collect();
-                    quote! {
-                        if let Ok(arr) = ::core::convert::TryInto::<::js_sys::Array>::try_into(value.clone()) {
-                            if arr.length() == #len {
-                                if let Ok(v) = (|| -> ::core::result::Result<#name, ::typewire::Error> {
-                                    #(#bindings)*
-                                    Ok(#name::#vname(#(#vars),*))
-                                })() {
-                                    return Ok(v);
-                                }
-                            }
-                        }
-                    }
-                }
-                VariantKind::Named(fields) => {
-                    let body = named_fields_from_js_obj(name, vname, fields);
-                    quote! {
-                        if let Ok(v) = (|| -> ::core::result::Result<#name, ::typewire::Error> {
-                            #body
-                        })() {
-                            return Ok(v);
-                        }
-                    }
-                }
+      match &v.kind {
+        VariantKind::Unit => quote! {
+          if value.is_null() || value.is_undefined() {
+            return Ok(#name::#vname);
+          }
+        },
+        VariantKind::Unnamed(types) if types.len() == 1 => {
+          let ty = &types[0];
+          quote! {
+            if let Ok(v) = <#ty as ::typewire::Typewire>::from_js(value.clone()) {
+              return Ok(#name::#vname(v));
             }
-        })
-        .collect()
+          }
+        }
+        VariantKind::Unnamed(types) => {
+          let len = u32::try_from(types.len()).unwrap();
+          let bindings = types.iter().enumerate().map(|(i, ty)| {
+            let var = format_ident!("__f{i}");
+            let idx = u32::try_from(i).unwrap();
+            quote! { let #var = <#ty as ::typewire::Typewire>::from_js(arr.get(#idx))?; }
+          });
+          let vars: Vec<_> = (0..types.len()).map(|i| format_ident!("__f{i}")).collect();
+          quote! {
+            if let Ok(arr) = ::core::convert::TryInto::<::js_sys::Array>::try_into(value.clone()) {
+              if arr.length() == #len {
+                if let Ok(v) = (|| -> ::core::result::Result<#name, ::typewire::Error> {
+                  #(#bindings)*
+                  Ok(#name::#vname(#(#vars),*))
+                })() {
+                  return Ok(v);
+                }
+              }
+            }
+          }
+        }
+        VariantKind::Named(fields) => {
+          let body = named_fields_from_js_obj(name, vname, fields);
+          quote! {
+            if let Ok(v) = (|| -> ::core::result::Result<#name, ::typewire::Error> {
+              #body
+            })() {
+              return Ok(v);
+            }
+          }
+        }
+      }
+    })
+    .collect()
 }
 
 /// Generate the `#[serde(other)]` catch-all return, if any variant has it.

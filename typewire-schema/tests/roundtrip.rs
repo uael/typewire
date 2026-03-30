@@ -17,6 +17,12 @@ mod ts {
     section
   }
 
+  /// Helper: decode section bytes and generate TypeScript.
+  fn generate_ts(bytes: &[u8]) -> String {
+    let schemas = decode::parse_section(bytes).unwrap();
+    typescript::generate(&schemas)
+  }
+
   // -----------------------------------------------------------------------
   // Discriminant enums — from_u8 round-trips
   // -----------------------------------------------------------------------
@@ -731,7 +737,7 @@ mod ts {
       ),
     });
     let bytes = record.as_bytes();
-    let ts = typescript::generate(bytes).unwrap();
+    let ts = generate_ts(bytes);
     assert!(ts.contains("export interface Center {"), "got:\n{ts}");
     assert!(ts.contains("x: number;"), "got:\n{ts}");
     assert!(ts.contains("y: number;"), "got:\n{ts}");
@@ -756,7 +762,7 @@ mod ts {
       }),
     });
     let bytes = record.as_bytes();
-    let ts = typescript::generate(bytes).unwrap();
+    let ts = generate_ts(bytes);
     assert!(ts.contains("v?: string | null;"), "got:\n{ts}");
   }
 
@@ -773,7 +779,7 @@ mod ts {
       fields: Types2(PrimitiveIdent::new(Scalar::f32), PrimitiveIdent::new(Scalar::f64)),
     });
     let bytes = record.as_bytes();
-    let ts = typescript::generate(bytes).unwrap();
+    let ts = generate_ts(bytes);
     assert!(ts.contains("export type Pair = [number, number];"), "got:\n{ts}");
   }
 
@@ -789,7 +795,7 @@ mod ts {
       fields: Types0(),
     });
     let bytes = record.as_bytes();
-    let ts = typescript::generate(bytes).unwrap();
+    let ts = generate_ts(bytes);
     assert!(ts.contains("export type Empty = null;"), "got:\n{ts}");
   }
 
@@ -802,7 +808,7 @@ mod ts {
       inner: PrimitiveIdent::new(Scalar::str),
     });
     let bytes = record.as_bytes();
-    let ts = typescript::generate(bytes).unwrap();
+    let ts = generate_ts(bytes);
     assert!(ts.contains("export type UserId = string;"), "got:\n{ts}");
   }
 
@@ -810,7 +816,7 @@ mod ts {
   fn ts_all_unit_enum() {
     let record = build_unit_enum_record();
     let bytes = record.as_bytes();
-    let ts = typescript::generate(bytes).unwrap();
+    let ts = generate_ts(bytes);
     assert!(ts.contains("export type Color = \"red\" | \"green\";"), "got:\n{ts}");
   }
 
@@ -853,7 +859,7 @@ mod ts {
       ),
     });
     let bytes = record.as_bytes();
-    let ts = typescript::generate(bytes).unwrap();
+    let ts = generate_ts(bytes);
     assert!(ts.contains("\"none\""), "got:\n{ts}");
     assert!(ts.contains("\"rect\""), "got:\n{ts}");
     assert!(ts.contains("width: number"), "got:\n{ts}");
@@ -887,7 +893,7 @@ mod ts {
       }),
     });
     let bytes = record.as_bytes();
-    let ts = typescript::generate(bytes).unwrap();
+    let ts = generate_ts(bytes);
     assert!(ts.contains("type: \"move\""), "got:\n{ts}");
     assert!(ts.contains("speed: number"), "got:\n{ts}");
   }
@@ -914,7 +920,7 @@ mod ts {
       }),
     });
     let bytes = record.as_bytes();
-    let ts = typescript::generate(bytes).unwrap();
+    let ts = generate_ts(bytes);
     assert!(ts.contains("t: \"zoom\""), "got:\n{ts}");
     assert!(ts.contains("data: number"), "got:\n{ts}");
   }
@@ -928,7 +934,7 @@ mod ts {
       into_ty: Ident::new(*b"MyDto"),
     });
     let bytes = record.as_bytes();
-    let ts = typescript::generate(bytes).unwrap();
+    let ts = generate_ts(bytes);
     assert!(ts.contains("export type MyType = MyDto;"), "got:\n{ts}");
   }
 
@@ -942,7 +948,7 @@ mod ts {
       is_try: 0,
     });
     let bytes = record.as_bytes();
-    let ts = typescript::generate(bytes).unwrap();
+    let ts = generate_ts(bytes);
     assert!(ts.contains("export type MyModel = MyProxy;"), "got:\n{ts}");
   }
 
@@ -974,7 +980,7 @@ mod ts {
       ),
     });
     let bytes = record.as_bytes();
-    let ts = typescript::generate(bytes).unwrap();
+    let ts = generate_ts(bytes);
     assert!(!ts.contains("skipped"), "skipped field should be omitted: {ts}");
     assert!(ts.contains("kept: boolean;"), "got:\n{ts}");
   }
@@ -998,7 +1004,7 @@ mod ts {
       }),
     });
     let bytes = record.as_bytes();
-    let ts = typescript::generate(bytes).unwrap();
+    let ts = generate_ts(bytes);
     assert!(ts.contains("items: string[];"), "got:\n{ts}");
   }
 
@@ -1022,7 +1028,7 @@ mod ts {
       }),
     });
     let bytes = record.as_bytes();
-    let ts = typescript::generate(bytes).unwrap();
+    let ts = generate_ts(bytes);
     assert!(ts.contains("map: Record<string, number>;"), "got:\n{ts}");
   }
 
@@ -1063,7 +1069,7 @@ mod ts {
     let t_bytes = t.as_bytes();
 
     let section = concat_sections(&[prim_bytes, s_bytes, t_bytes]);
-    let ts = typescript::generate(&section).unwrap();
+    let ts = generate_ts(&section);
 
     // Should have both named types (primitive records are skipped in output)
     assert!(ts.contains("export interface A {"), "got:\n{ts}");
@@ -1116,7 +1122,7 @@ mod ts {
         inner: PrimitiveIdent::new(scalar),
       });
       let bytes = record.as_bytes();
-      let ts = typescript::generate(bytes).unwrap();
+      let ts = generate_ts(bytes);
 
       let expected_line = format!("export type {name} = {expected};");
       assert!(
@@ -1132,7 +1138,7 @@ mod ts {
 
   #[test]
   fn empty_section_produces_no_output() {
-    let ts = typescript::generate(&[]).unwrap();
+    let ts = generate_ts(&[]);
     assert!(ts.is_empty(), "expected empty, got: {ts}");
   }
 
@@ -1177,7 +1183,7 @@ mod ts {
       ),
     });
     let bytes = record.as_bytes();
-    let ts = typescript::generate(bytes).unwrap();
+    let ts = generate_ts(bytes);
     assert!(ts.contains("\"yes\""), "got:\n{ts}");
     assert!(!ts.contains("hidden"), "hidden variant should be omitted: {ts}");
   }

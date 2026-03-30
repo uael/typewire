@@ -7,20 +7,15 @@ use std::fmt::Write;
 
 use crate::{
   Enum, EnumFlags, FieldDefault, FieldFlags, Scalar, Schema, Struct, StructShape, Tagging,
-  Transparent, Variant, VariantFlags, VariantKind, decode,
+  Transparent, Variant, VariantFlags, VariantKind,
 };
 
-/// Generate TypeScript declarations from raw `typewire_schemas` section bytes.
-///
-/// # Errors
-///
-/// Returns an error if the section contains malformed records.
-pub fn generate(data: &[u8]) -> Result<String, decode::Error> {
-  let schemas = decode::parse_section(data)?;
-
+/// Generate TypeScript declarations from parsed [`Schema`] values.
+#[must_use]
+pub fn generate<'a>(schemas: impl IntoIterator<Item = &'a Schema>) -> String {
   // Collect and sort named type definitions for deterministic output
   let mut named: Vec<&Schema> = schemas
-    .iter()
+    .into_iter()
     .filter(|s| s.ident().is_some_and(|name| !name.is_empty()) && !s.is_type_ref())
     .collect();
   named.sort_by_key(|s| s.ident().unwrap_or(""));
@@ -43,7 +38,7 @@ pub fn generate(data: &[u8]) -> Result<String, decode::Error> {
     }
   }
 
-  Ok(out)
+  out
 }
 
 fn emit_struct(s: &Struct, out: &mut String) {

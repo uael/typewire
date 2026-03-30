@@ -13,6 +13,7 @@ readme = "../README.md"
 [features]
 default = ["derive"]
 derive = ["dep:typewire-derive"]
+schemas = ["typewire-derive?/schemas"]
 uuid = ["dep:uuid"]
 fractional_index = ["dep:fractional_index"]
 chrono = ["dep:chrono"]

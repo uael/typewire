@@ -32,7 +32,7 @@ Or manually:
 
 ```sh
 cargo build -p todo-app --target wasm32-unknown-unknown --release
-cargo run -p typewire --features cli -- target/wasm32-unknown-unknown/release/todo_app.wasm --no-strip -o examples/todo-app/types.d.ts
+cargo run -p typewire --features cli -- target/wasm32-unknown-unknown/release/todo_app.wasm -o examples/todo-app/types.d.ts
 wasm-bindgen target/wasm32-unknown-unknown/release/todo_app.wasm --out-dir examples/todo-app/pkg --target nodejs
 cd examples/todo-app && npm install && npx tsc --noEmit && npx tsx test.ts
 ```

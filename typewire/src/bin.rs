@@ -37,8 +37,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     .ok_or_else(|| format!("no {SECTION_NAME} section found in {}", cli.binary.display()))?;
   let schema_bytes = section.data()?;
 
+  let schemas = typewire_schema::decode::parse_section(schema_bytes)?;
+
   let output = match cli.lang {
-    Lang::Typescript => typewire_schema::typescript::generate(schema_bytes)?,
+    Lang::Typescript => typewire_schema::typescript::generate(&schemas),
   };
 
   match cli.output {

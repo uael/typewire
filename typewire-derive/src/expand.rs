@@ -55,8 +55,9 @@ pub fn expand<C: Codegen>(input: &DeriveInput) -> TokenStream {
   let cfg = C::cfg_predicate();
   let gated = methods.iter().map(|m| quote! { #[cfg(#cfg)] #m });
 
-  // Schema type + const + link section
-  let (schema_items, coded_section) = encode::generate_schema_and_section(&schema);
+  // Schema type + const + link section (gated behind `schemas` feature)
+  let (schema_items, coded_section) =
+    encode::generate_schema_and_section(&schema, cfg!(feature = "schemas"));
 
   let ident = schema.ident();
 
@@ -70,11 +71,11 @@ pub fn expand<C: Codegen>(input: &DeriveInput) -> TokenStream {
   let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
   quote! {
-      impl #impl_generics ::typewire::Typewire for #ident #ty_generics #where_clause {
-          #(#gated)*
-          #schema_items
-      }
-      #coded_section
+    impl #impl_generics ::typewire::Typewire for #ident #ty_generics #where_clause {
+      #(#gated)*
+      #schema_items
+    }
+    #coded_section
   }
 }
 
@@ -256,7 +257,7 @@ fn analyze_variant(
   container: &ContainerAttrs,
 ) -> Result<SchemaVariant, TokenStream> {
   let vattrs = VariantAttrs::from_attrs(&v.attrs);
-  let wire_name = variant_js_name(&v.ident, &vattrs, container.rename_all);
+  let wire_name = variant_wire_name(&v.ident, &vattrs, container.rename_all);
   let all_wire_names = variant_all_names(&wire_name, &vattrs);
 
   let mut flags = VariantFlags::empty();
@@ -308,7 +309,7 @@ fn analyze_named_fields(
         .ok_or_else(|| syn::Error::new_spanned(f, "expected named field").to_compile_error())?;
       let ty = f.ty.clone();
       let rust_name = ident.to_string();
-      let wire_name = field_js_name(Some(&rust_name), &fattrs, rename_all);
+      let wire_name = field_wire_name(Some(&rust_name), &fattrs, rename_all);
 
       let mut flags = FieldFlags::empty();
       if fattrs.skip_serializing() {
@@ -418,7 +419,7 @@ fn build_type_shape(
 // ---------------------------------------------------------------------------
 
 /// Resolve the JS name for a field.
-pub fn field_js_name(
+pub fn field_wire_name(
   rust_name: Option<&str>,
   attrs: &FieldAttrs,
   rename_all: Option<RenameAll>,
@@ -431,7 +432,7 @@ pub fn field_js_name(
 }
 
 /// Resolve the JS tag name for a variant.
-fn variant_js_name(
+fn variant_wire_name(
   ident: &syn::Ident,
   attrs: &VariantAttrs,
   rename_all: Option<RenameAll>,
