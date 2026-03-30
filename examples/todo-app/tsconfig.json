@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "target": "es2022",
+    "allowImportingTsExtensions": true,
+    "types": ["node"]
+  },
+  "include": ["test.ts", "types.d.ts", "pkg/*.d.ts"]
+}

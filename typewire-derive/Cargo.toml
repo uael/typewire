@@ -10,13 +10,17 @@ homepage = "https://github.com/uael/typewire"
 documentation = "https://docs.rs/typewire-derive"
 readme = "../README.md"
 
+[features]
+schemas = []
+
 [lib]
 proc-macro = true
 
 [dependencies]
-syn = { version = "2", features = ["full"] }
-quote = "1"
+typewire-schema = { version = "=0.0.1", path = "../typewire-schema", features = ["encode"] }
 proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full", "parsing", "proc-macro"] }
 
 [lints]
 workspace = true

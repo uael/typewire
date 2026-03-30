@@ -1,2 +1,6 @@
 [alias]
 xtask = "run -p xtask --"
+
+# Required for `cargo test --target wasm32-unknown-unknown` to use wasm-bindgen-test.
+[target.wasm32-unknown-unknown]
+runner = 'wasm-bindgen-test-runner'

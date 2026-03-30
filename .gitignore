@@ -25,13 +25,31 @@
 !.cargo/config.toml
 !typewire/
 !typewire/src/
+!typewire/tests/
+!typewire/tests/common/
+!typewire/tests/compile_fail/
+!typewire/tests/compile_fail/*.stderr
 !typewire/**/*.rs
 !typewire-derive/
 !typewire-derive/src/
 !typewire-derive/**/*.rs
 !typewire-schema/
 !typewire-schema/src/
+!typewire-schema/tests/
 !typewire-schema/**/*.rs
+
+# Rust (examples)
+!examples/
+!examples/*/
+!examples/*/Cargo.toml
+!examples/*/README.md
+!examples/*/*.ts
+!examples/*/*.d.ts
+examples/*/*.gen.d.ts
+!examples/*/tsconfig.json
+!examples/*/package.json
+!examples/*/src/
+!examples/**/*.rs
 
 # Rust (xtask)
 !xtask/

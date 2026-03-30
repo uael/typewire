@@ -10,6 +10,20 @@ homepage = "https://github.com/uael/typewire"
 documentation = "https://docs.rs/typewire-schema"
 readme = "../README.md"
 
+[features]
+default = []
+encode = ["dep:syn", "dep:quote", "dep:proc-macro2"]
+decode = ["dep:thiserror"]
+typescript = ["decode"]
+
+[dependencies]
+bitflags = "2"
+proc-macro2 = { version = "1", optional = true }
+quote = { version = "1", optional = true }
+syn = { version = "2", features = ["full", "parsing", "proc-macro"], optional = true }
+thiserror = { version = "2", optional = true }
+zerocopy = { version = "0.8", features = ["derive"] }
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]

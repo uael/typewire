@@ -1,0 +1,5 @@
+error: `content` requires `tag` (adjacently-tagged representation)
+ --> tests/compile_fail/content_without_tag.rs:5:6
+  |
+5 | enum Bad {
+  |      ^^^
