@@ -22,12 +22,37 @@ Requires **stable** Rust (pinned in `rust-toolchain`). Formatting uses nightly r
 
 ## Architecture
 
+typewire provides bidirectional Rust↔JavaScript type conversion for wasm32 targets, with compile-time schema embedding and TypeScript declaration generation.
+
+### Pipeline
+
+```
+#[derive(Typewire)]  →  encode (link section)  →  decode  →  TypeScript .d.ts
+     (derive)              (typewire-schema)       (CLI)       (codegen)
+```
+
+1. `#[derive(Typewire)]` analyzes types and emits `to_js`/`from_js`/`patch_js` + schema records in link sections
+2. The `typewire` CLI extracts schema records from compiled binaries and generates TypeScript declarations
+3. The generated `.d.ts` types match the wire format of the Rust types
+
 ### Workspace Crates
 
-- **`typewire/`** — Main library
-- **`typewire-derive/`** — Proc-macro crate: derive macros for typewire
-- **`typewire-schema/`** — Schema types for typewire
-- **`xtask/`** — Dev automation (fmt, lint)
+| Crate | Role |
+|-------|------|
+| `typewire/` | Main library: `Typewire` trait, primitive/compound impls, error types, CLI binary |
+| `typewire-derive/` | Proc-macro: `#[derive(Typewire)]` with full serde attribute support |
+| `typewire-schema/` | Schema metadata: coded binary format, encode/decode, TypeScript emitter |
+| `xtask/` | Dev automation: fmt, lint (8 clippy passes), test (unit/wasm/e2e) |
+| `examples/todo-app/` | End-to-end example: wasm cdylib with TypeScript type-checking |
+
+### Feature Matrix
+
+`typewire-schema` has mutually exclusive feature sets:
+- `encode` — derive-time (uses `syn`), enabled by `typewire-derive`
+- `decode` — runtime codegen (uses `thiserror`), enabled by `typewire[cli]`
+- `typescript` — implies `decode`, adds TypeScript emitter
+
+These cannot be combined in a single compilation. The xtask lint command handles this by running separate clippy passes per feature combination.
 
 ## Releasing
 
@@ -35,7 +60,7 @@ Releases are automated with [release-plz](https://release-plz.dev/). On every pu
 
 - Config: `release-plz.toml`
 - Workflow: `.github/workflows/release-plz.yml`
-- Only `typewire`, `typewire-derive`, and `typewire-schema` are published; `xtask` is excluded
+- Only `typewire`, `typewire-derive`, and `typewire-schema` are published; `xtask` and examples are excluded
 - `typewire` owns the changelog and git tags (`v{{ version }}`); `typewire-derive` and `typewire-schema` are bumped in lockstep without their own changelog or tags
 
 ### Commit Message Format
@@ -60,4 +85,5 @@ Use [Conventional Commits](https://www.conventionalcommits.org/) — release-plz
 - 2-space indentation, max 100 columns
 - Imports: reordered, grouped by `StdExternalCrate`, granularity `Crate`
 - Clippy: `pedantic` + `nursery` at warn; `dbg_macro`, `allow_attributes`, `missing_safety_doc`, `undocumented_unsafe_blocks` denied
+- No `#[allow]` — use `#[expect(lint, reason = "...")]` when suppression is necessary
 - Dual-licensed: Apache-2.0 OR MIT
