@@ -203,9 +203,10 @@ fn ty_to_ts(schema: &Schema) -> String {
       let ts = ty_to_ts(element);
       format!("{}[]", wrap_if_union(&ts))
     }
-    Schema::Map { value, .. } => {
-      let ts = ty_to_ts(value);
-      format!("Record<string, {ts}>")
+    Schema::Map { key, value } => {
+      let key_ts = ty_to_ts(key);
+      let val_ts = ty_to_ts(value);
+      format!("Record<{key_ts}, {val_ts}>")
     }
     Schema::Tuple(elements) => {
       let types: Vec<_> = elements.iter().map(|t| ty_to_ts(t)).collect();
@@ -241,7 +242,7 @@ const fn scalar_to_ts(scalar: Scalar) -> &'static str {
     | Scalar::FractionalIndex => "string",
     Scalar::Unit => "null",
     Scalar::Bytes => "Uint8ClampedArray",
-    Scalar::SerdeJsonValue => "unknown",
+    Scalar::SerdeJsonValue => "any",
   }
 }
 

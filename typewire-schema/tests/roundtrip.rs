@@ -5,22 +5,8 @@
 mod ts {
   use typewire_schema::{
     EnumFlags, FieldDefault, FieldFlags, Scalar, Schema, Struct, StructFlags, StructShape, Tagging,
-    VariantFlags, VariantKind, coded::*, decode, typescript,
+    VariantFlags, VariantKind, coded::*, decode, typescript, zerocopy::IntoBytes,
   };
-
-  /// Helper: convert a Record<T> to its raw bytes (length-prefixed).
-  ///
-  /// # Safety
-  ///
-  /// `T` must be `repr(C, packed)` so that `Record<T>` has no padding and
-  /// every byte is meaningful.
-  const unsafe fn record_bytes<T: Copy>(r: &Record<T>) -> &[u8] {
-    let ptr = std::ptr::from_ref::<Record<T>>(r).cast::<u8>();
-    let size = core::mem::size_of::<Record<T>>();
-    // SAFETY: `Record<T>` is repr(C, packed) and `Copy`, so the pointer
-    // is valid for `size` contiguous bytes with no padding.
-    unsafe { core::slice::from_raw_parts(ptr, size) }
-  }
 
   /// Helper: concatenate multiple records into a section.
   fn concat_sections(records: &[&[u8]]) -> Vec<u8> {
@@ -91,8 +77,7 @@ mod ts {
   #[test]
   fn primitive_roundtrip() {
     let record = Record::new(FlatPrimitive { tag: Tag::Primitive, scalar: Scalar::f32 });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let schemas = decode::parse_section(bytes).unwrap();
 
     assert_eq!(schemas.len(), 1);
@@ -130,8 +115,7 @@ mod ts {
         },
       ),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let schemas = decode::parse_section(bytes).unwrap();
 
     assert_eq!(schemas.len(), 1);
@@ -159,8 +143,7 @@ mod ts {
       field_count: U32Le::new(2),
       fields: Types2(PrimitiveIdent::new(Scalar::f32), PrimitiveIdent::new(Scalar::f64)),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let schemas = decode::parse_section(bytes).unwrap();
 
     assert_eq!(schemas.len(), 1);
@@ -186,8 +169,7 @@ mod ts {
       field_count: U32Le::new(0),
       fields: Types0(),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let schemas = decode::parse_section(bytes).unwrap();
 
     assert_eq!(schemas.len(), 1);
@@ -209,8 +191,7 @@ mod ts {
       atomic: 0,
       inner: PrimitiveIdent::new(Scalar::str),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let schemas = decode::parse_section(bytes).unwrap();
 
     assert_eq!(schemas.len(), 1);
@@ -232,8 +213,7 @@ mod ts {
       atomic: 1,
       inner: PrimitiveIdent::new(Scalar::f64),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let schemas = decode::parse_section(bytes).unwrap();
 
     assert_eq!(schemas.len(), 1);
@@ -286,8 +266,7 @@ mod ts {
   #[test]
   fn enum_external_unit_roundtrip() {
     let record = build_unit_enum_record();
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let schemas = decode::parse_section(bytes).unwrap();
 
     assert_eq!(schemas.len(), 1);
@@ -333,8 +312,7 @@ mod ts {
       }),
     });
 
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let schemas = decode::parse_section(bytes).unwrap();
 
     assert_eq!(schemas.len(), 1);
@@ -378,8 +356,7 @@ mod ts {
       }),
     });
 
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let schemas = decode::parse_section(bytes).unwrap();
 
     assert_eq!(schemas.len(), 1);
@@ -419,8 +396,7 @@ mod ts {
       }),
     });
 
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let schemas = decode::parse_section(bytes).unwrap();
 
     assert_eq!(schemas.len(), 1);
@@ -446,8 +422,7 @@ mod ts {
       into_ty: Ident::new(*b"MyDto"),
     });
 
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let schemas = decode::parse_section(bytes).unwrap();
 
     assert_eq!(schemas.len(), 1);
@@ -470,8 +445,7 @@ mod ts {
       is_try: 1,
     });
 
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let schemas = decode::parse_section(bytes).unwrap();
 
     assert_eq!(schemas.len(), 1);
@@ -509,8 +483,7 @@ mod ts {
         default: FieldDefaultKind::Default,
       }),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let schemas = decode::parse_section(bytes).unwrap();
 
     assert_eq!(schemas.len(), 1);
@@ -553,8 +526,7 @@ mod ts {
         default: FieldDefaultKind::None,
       }),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let schemas = decode::parse_section(bytes).unwrap();
 
     match &schemas[0] {
@@ -592,8 +564,7 @@ mod ts {
         default: FieldDefaultKind::None,
       }),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let schemas = decode::parse_section(bytes).unwrap();
 
     match &schemas[0] {
@@ -616,7 +587,9 @@ mod ts {
 
   #[test]
   fn box_ident_roundtrip() {
-    type TyIdent = BoxIdent<Ident<4>>;
+    // OptionIdent has the same layout as the removed BoxIdent (tag + inner),
+    // so we reuse it with Tag::Box to test backward-compatible decoding.
+    type TyIdent = OptionIdent<Ident<4>>;
     type Fields = Types1<FlatField<5, 5, TyIdent>>;
     let record: Record<FlatStruct<4, Fields>> = Record::new(FlatStruct {
       tag: Tag::Struct,
@@ -627,14 +600,13 @@ mod ts {
       field_count: U32Le::new(1),
       fields: Types1(FlatField {
         ident: Ident::new(*b"child"),
-        ty: BoxIdent::new(Ident::new(*b"Tree")),
+        ty: OptionIdent { tag: Tag::Box, inner: Ident::new(*b"Tree") },
         wire_name: Ident::new(*b"child"),
         flags: FieldFlags::empty(),
         default: FieldDefaultKind::None,
       }),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let schemas = decode::parse_section(bytes).unwrap();
 
     match &schemas[0] {
@@ -672,8 +644,7 @@ mod ts {
         default: FieldDefaultKind::None,
       }),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let schemas = decode::parse_section(bytes).unwrap();
 
     match &schemas[0] {
@@ -712,8 +683,7 @@ mod ts {
         default: FieldDefaultKind::Default,
       }),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let schemas = decode::parse_section(bytes).unwrap();
 
     match &schemas[0] {
@@ -760,8 +730,7 @@ mod ts {
         },
       ),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let ts = typescript::generate(bytes).unwrap();
     assert!(ts.contains("export interface Center {"), "got:\n{ts}");
     assert!(ts.contains("x: number;"), "got:\n{ts}");
@@ -786,8 +755,7 @@ mod ts {
         default: FieldDefaultKind::Default,
       }),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let ts = typescript::generate(bytes).unwrap();
     assert!(ts.contains("v?: string | null;"), "got:\n{ts}");
   }
@@ -804,8 +772,7 @@ mod ts {
       field_count: U32Le::new(2),
       fields: Types2(PrimitiveIdent::new(Scalar::f32), PrimitiveIdent::new(Scalar::f64)),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let ts = typescript::generate(bytes).unwrap();
     assert!(ts.contains("export type Pair = [number, number];"), "got:\n{ts}");
   }
@@ -821,8 +788,7 @@ mod ts {
       field_count: U32Le::new(0),
       fields: Types0(),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let ts = typescript::generate(bytes).unwrap();
     assert!(ts.contains("export type Empty = null;"), "got:\n{ts}");
   }
@@ -835,8 +801,7 @@ mod ts {
       atomic: 0,
       inner: PrimitiveIdent::new(Scalar::str),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let ts = typescript::generate(bytes).unwrap();
     assert!(ts.contains("export type UserId = string;"), "got:\n{ts}");
   }
@@ -844,8 +809,7 @@ mod ts {
   #[test]
   fn ts_all_unit_enum() {
     let record = build_unit_enum_record();
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let ts = typescript::generate(bytes).unwrap();
     assert!(ts.contains("export type Color = \"red\" | \"green\";"), "got:\n{ts}");
   }
@@ -888,8 +852,7 @@ mod ts {
         },
       ),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let ts = typescript::generate(bytes).unwrap();
     assert!(ts.contains("\"none\""), "got:\n{ts}");
     assert!(ts.contains("\"rect\""), "got:\n{ts}");
@@ -923,8 +886,7 @@ mod ts {
         }),
       }),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let ts = typescript::generate(bytes).unwrap();
     assert!(ts.contains("type: \"move\""), "got:\n{ts}");
     assert!(ts.contains("speed: number"), "got:\n{ts}");
@@ -951,8 +913,7 @@ mod ts {
         fields: Types1(PrimitiveIdent::new(Scalar::f64)),
       }),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let ts = typescript::generate(bytes).unwrap();
     assert!(ts.contains("t: \"zoom\""), "got:\n{ts}");
     assert!(ts.contains("data: number"), "got:\n{ts}");
@@ -966,8 +927,7 @@ mod ts {
       generic_count: U32Le::new(0),
       into_ty: Ident::new(*b"MyDto"),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let ts = typescript::generate(bytes).unwrap();
     assert!(ts.contains("export type MyType = MyDto;"), "got:\n{ts}");
   }
@@ -981,8 +941,7 @@ mod ts {
       proxy: Ident::new(*b"MyProxy"),
       is_try: 0,
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let ts = typescript::generate(bytes).unwrap();
     assert!(ts.contains("export type MyModel = MyProxy;"), "got:\n{ts}");
   }
@@ -1014,8 +973,7 @@ mod ts {
         },
       ),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let ts = typescript::generate(bytes).unwrap();
     assert!(!ts.contains("skipped"), "skipped field should be omitted: {ts}");
     assert!(ts.contains("kept: boolean;"), "got:\n{ts}");
@@ -1039,8 +997,7 @@ mod ts {
         default: FieldDefaultKind::None,
       }),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let ts = typescript::generate(bytes).unwrap();
     assert!(ts.contains("items: string[];"), "got:\n{ts}");
   }
@@ -1064,8 +1021,7 @@ mod ts {
         default: FieldDefaultKind::None,
       }),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let ts = typescript::generate(bytes).unwrap();
     assert!(ts.contains("map: Record<string, number>;"), "got:\n{ts}");
   }
@@ -1079,8 +1035,7 @@ mod ts {
     type Fields = Types1<FlatField<1, 1, PrimitiveIdent>>;
 
     let prim = Record::new(FlatPrimitive { tag: Tag::Primitive, scalar: Scalar::f32 });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let prim_bytes = unsafe { record_bytes(&prim) };
+    let prim_bytes = prim.as_bytes();
 
     let s: Record<FlatStruct<1, Fields>> = Record::new(FlatStruct {
       tag: Tag::Struct,
@@ -1097,8 +1052,7 @@ mod ts {
         default: FieldDefaultKind::None,
       }),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let s_bytes = unsafe { record_bytes(&s) };
+    let s_bytes = s.as_bytes();
 
     let t: Record<FlatTransparent<1, PrimitiveIdent>> = Record::new(FlatTransparent {
       tag: Tag::Transparent,
@@ -1106,8 +1060,7 @@ mod ts {
       atomic: 0,
       inner: PrimitiveIdent::new(Scalar::bool),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let t_bytes = unsafe { record_bytes(&t) };
+    let t_bytes = t.as_bytes();
 
     let section = concat_sections(&[prim_bytes, s_bytes, t_bytes]);
     let ts = typescript::generate(&section).unwrap();
@@ -1146,7 +1099,7 @@ mod ts {
       (Scalar::Uuid, "string"),
       (Scalar::Bytes, "Uint8ClampedArray"),
       (Scalar::DateTime, "string"),
-      (Scalar::SerdeJsonValue, "unknown"),
+      (Scalar::SerdeJsonValue, "any"),
       (Scalar::FractionalIndex, "string"),
     ];
 
@@ -1162,8 +1115,7 @@ mod ts {
         atomic: 0,
         inner: PrimitiveIdent::new(scalar),
       });
-      // SAFETY: Record<T> is repr(C, packed) and Copy.
-      let bytes = unsafe { record_bytes(&record) };
+      let bytes = record.as_bytes();
       let ts = typescript::generate(bytes).unwrap();
 
       let expected_line = format!("export type {name} = {expected};");
@@ -1224,8 +1176,7 @@ mod ts {
         },
       ),
     });
-    // SAFETY: Record<T> is repr(C, packed) and Copy.
-    let bytes = unsafe { record_bytes(&record) };
+    let bytes = record.as_bytes();
     let ts = typescript::generate(bytes).unwrap();
     assert!(ts.contains("\"yes\""), "got:\n{ts}");
     assert!(!ts.contains("hidden"), "hidden variant should be omitted: {ts}");

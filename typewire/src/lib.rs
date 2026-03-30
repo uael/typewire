@@ -88,43 +88,6 @@ pub fn patch_js_atomic<T: Typewire + PartialEq>(
 // Link section statics for built-in types
 // ---------------------------------------------------------------------------
 
-/// Emit a link-section static for a primitive type.
-///
-/// NB: `link_section` requires a string literal — must match `coded::SECTION_NAME`.
-macro_rules! typewire_link_section_primitive {
-  ($scalar:ident) => {
-    const _: () = {
-      #[cfg_attr(target_vendor = "apple", unsafe(link_section = "__DATA,typewire_schemas"))]
-      #[cfg_attr(not(target_vendor = "apple"), unsafe(link_section = "typewire_schemas"))]
-      #[used]
-      static __GAFFER_SCHEMA: schema::coded::Record<schema::coded::FlatPrimitive> =
-        schema::coded::Record::new(schema::coded::FlatPrimitive {
-          tag: schema::coded::Tag::Primitive,
-          scalar: schema::Scalar::$scalar,
-        });
-    };
-  };
-}
-
-typewire_link_section_primitive!(bool);
-typewire_link_section_primitive!(u8);
-typewire_link_section_primitive!(u16);
-typewire_link_section_primitive!(u32);
-typewire_link_section_primitive!(u64);
-typewire_link_section_primitive!(u128);
-typewire_link_section_primitive!(i8);
-typewire_link_section_primitive!(i16);
-typewire_link_section_primitive!(i32);
-typewire_link_section_primitive!(i64);
-typewire_link_section_primitive!(i128);
-typewire_link_section_primitive!(usize);
-typewire_link_section_primitive!(isize);
-typewire_link_section_primitive!(f32);
-typewire_link_section_primitive!(f64);
-typewire_link_section_primitive!(char);
-typewire_link_section_primitive!(str);
-typewire_link_section_primitive!(Unit);
-
 // ---------------------------------------------------------------------------
 // Primitive implementations (only compiled on wasm32)
 // ---------------------------------------------------------------------------
@@ -711,8 +674,8 @@ pub fn patch_js_slice_inner<'a, T: Typewire + 'a>(
 }
 
 impl<T: Typewire> Typewire for Box<T> {
-  type Ident = schema::coded::BoxIdent<T::Ident>;
-  const IDENT: Self::Ident = schema::coded::BoxIdent::new(T::IDENT);
+  type Ident = T::Ident;
+  const IDENT: Self::Ident = T::IDENT;
 
   #[cfg(target_arch = "wasm32")]
   fn to_js(&self) -> wasm_bindgen::JsValue {
@@ -1025,21 +988,6 @@ impl_typewire_tuple!(11, Types11; 0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G, 7: H
 impl_typewire_tuple!(12, Types12; 0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G, 7: H, 8: I, 9: J, 10: K, 11: L);
 
 // ---------------------------------------------------------------------------
-// Feature-gated link section statics
-// ---------------------------------------------------------------------------
-
-#[cfg(feature = "uuid")]
-typewire_link_section_primitive!(Uuid);
-#[cfg(feature = "fractional_index")]
-typewire_link_section_primitive!(FractionalIndex);
-#[cfg(feature = "url")]
-typewire_link_section_primitive!(Url);
-#[cfg(feature = "serde_json")]
-typewire_link_section_primitive!(SerdeJsonValue);
-#[cfg(feature = "bytes")]
-typewire_link_section_primitive!(Bytes);
-
-// ---------------------------------------------------------------------------
 // Feature-gated implementations
 // ---------------------------------------------------------------------------
 
@@ -1219,18 +1167,19 @@ impl Typewire for serde_json::Value {
     // is recursive (Array/Object contain Value), and each `impl FnOnce` closure
     // is a unique type. Without erasure the compiler generates an infinite chain
     // of distinct instantiations.
-    patch_js_json_value(self, old, Box::new(set));
+    let mut set = Some(set);
+    patch_js_json_value(self, old, &mut |v| (set.take().unwrap())(v));
   }
 }
 
-/// Inner helper for `serde_json::Value::patch_js`. Takes a boxed callback so all
-/// recursive calls through `patch_js_slice`/`patch_js_map` share the same concrete
-/// `Set = Box<dyn FnOnce(JsValue)>` monomorphization.
+/// Inner helper for `serde_json::Value::patch_js`. Takes a `&mut dyn FnMut`
+/// callback so all recursive calls through `patch_js_slice`/`patch_js_map`
+/// share the same concrete monomorphization without a heap allocation.
 #[cfg(all(feature = "serde_json", target_arch = "wasm32"))]
-fn patch_js_json_value<'a>(
+fn patch_js_json_value(
   value: &serde_json::Value,
   old: &wasm_bindgen::JsValue,
-  set: Box<dyn FnOnce(wasm_bindgen::JsValue) + 'a>,
+  set: &mut dyn FnMut(wasm_bindgen::JsValue),
 ) {
   match value {
     serde_json::Value::Null => {

@@ -18,9 +18,9 @@ struct Cli {
   #[arg(short, long)]
   output: Option<PathBuf>,
 
-  /// Strip the `typewire_schemas` section from the binary after extraction
+  /// Keep the `typewire_schemas` section in the binary after extraction
   #[arg(long)]
-  strip: bool,
+  no_strip: bool,
 }
 
 #[derive(Clone, ValueEnum)]
@@ -46,15 +46,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     None => print!("{output}"),
   }
 
-  if cli.strip {
-    let mut module = walrus::Module::from_buffer(&data)?;
-    let ids: Vec<_> =
-      module.customs.iter().filter(|(_, s)| s.name() == SECTION_NAME).map(|(id, _)| id).collect();
-    for id in ids {
-      module.customs.delete(id);
+  if !cli.no_strip {
+    if obj.format() == object::BinaryFormat::Wasm {
+      let mut module = walrus::Module::from_buffer(&data)?;
+      let ids: Vec<_> =
+        module.customs.iter().filter(|(_, s)| s.name() == SECTION_NAME).map(|(id, _)| id).collect();
+      for id in ids {
+        module.customs.delete(id);
+      }
+      let stripped = module.emit_wasm();
+      std::fs::write(&cli.binary, stripped)?;
+    } else {
+      eprintln!(
+        "warning: stripping is only supported for WASM binaries, skipping for {}",
+        cli.binary.display()
+      );
     }
-    let stripped = module.emit_wasm();
-    std::fs::write(&cli.binary, stripped)?;
   }
 
   Ok(())

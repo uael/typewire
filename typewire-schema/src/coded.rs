@@ -39,7 +39,7 @@ pub const SECTION_NAME: &str = "typewire_schemas";
 // -- Little-endian u32 --------------------------------------------------
 
 /// Little-endian u32, stored as raw bytes.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(transparent)]
 pub struct U32Le([u8; 4]);
 
@@ -69,7 +69,7 @@ const fn const_usize_to_u32(n: usize) -> u32 {
 /// self-delimiting when linkers concatenate same-named sections.
 ///
 /// Layout: `[4-byte LE len][len bytes of T]`.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(C, packed)]
 pub struct Record<T: Copy> {
   len: U32Le,
@@ -91,7 +91,7 @@ impl<T: Copy> Record<T> {
 
 /// Fixed-size inline string: LE length prefix + byte data.
 /// Used both as the ident for named types and for wire names in fields.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(C, packed)]
 pub struct Ident<const N: usize> {
   pub len: U32Le,
@@ -117,7 +117,7 @@ impl<const N: usize> Ident<N> {
 // these byte sequences to resolve the type DAG.
 
 /// Ident for `Option<T>`. Raw layout: `[Tag::Option, bytes_of(inner)]`.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(C, packed)]
 pub struct OptionIdent<Inner: Copy> {
   pub tag: Tag,
@@ -130,23 +130,9 @@ impl<Inner: Copy> OptionIdent<Inner> {
   }
 }
 
-/// Ident for `Box<T>`. Raw layout: `[Tag::Box, bytes_of(inner)]`.
-#[derive(Clone, Copy)]
-#[repr(C, packed)]
-pub struct BoxIdent<Inner: Copy> {
-  pub tag: Tag,
-  pub inner: Inner,
-}
-
-impl<Inner: Copy> BoxIdent<Inner> {
-  pub const fn new(inner: Inner) -> Self {
-    Self { tag: Tag::Box, inner }
-  }
-}
-
 /// Ident for `Vec<T>`, `[T; N]`, `IndexSet<T>`.
 /// Raw layout: `[Tag::Seq, bytes_of(element)]`.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(C, packed)]
 pub struct SeqIdent<Inner: Copy> {
   pub tag: Tag,
@@ -161,7 +147,7 @@ impl<Inner: Copy> SeqIdent<Inner> {
 
 /// Ident for `HashMap<K,V>`, `BTreeMap<K,V>`, `IndexMap<K,V>`.
 /// Raw layout: `[Tag::Map, bytes_of(key), bytes_of(value)]`.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(C, packed)]
 pub struct MapIdent<K: Copy, V: Copy> {
   pub tag: Tag,
@@ -177,7 +163,7 @@ impl<K: Copy, V: Copy> MapIdent<K, V> {
 
 /// Ident for tuples `(A, B, ...)`. Elements is a `Types{N}` of element idents.
 /// Raw layout: `[Tag::Struct, count_u8, bytes_of(elements)]`.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(C, packed)]
 pub struct TupleIdent<Elements: Copy> {
   pub tag: Tag,
@@ -193,7 +179,7 @@ impl<Elements: Copy> TupleIdent<Elements> {
 
 /// Ident for primitive/scalar types (`bool`, `f32`, `String`, etc.).
 /// Raw layout: `[Tag::Primitive, Scalar discriminant]`.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(C, packed)]
 pub struct PrimitiveIdent {
   pub tag: Tag,
@@ -239,7 +225,7 @@ macro_rules! impl_from_u8 {
 }
 
 /// Tag byte identifying the schema variant in a byte stream.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(u8)]
 pub enum Tag {
   Native = 0,
@@ -260,7 +246,7 @@ impl_from_u8!(Tag, Skipped, 12);
 /// Ident for skipped fields (fields with `#[serde(skip)]`).
 /// The derive emits this instead of `<FieldType as Typewire>::IDENT`
 /// so skipped field types don't need a Typewire impl.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(C, packed)]
 pub struct SkippedIdent {
   pub tag: Tag,
@@ -271,7 +257,7 @@ impl SkippedIdent {
 }
 
 /// Enum tagging strategy.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(u8)]
 pub enum TaggingKind {
   External = 0,
@@ -282,7 +268,7 @@ pub enum TaggingKind {
 impl_from_u8!(TaggingKind, Untagged, 4);
 
 /// How a field's default value is provided.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(u8)]
 pub enum FieldDefaultKind {
   None = 0,
@@ -292,7 +278,7 @@ pub enum FieldDefaultKind {
 impl_from_u8!(FieldDefaultKind, Path, 3);
 
 /// Variant payload shape.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(u8)]
 pub enum VariantKindTag {
   Unit = 0,
@@ -302,7 +288,7 @@ pub enum VariantKindTag {
 impl_from_u8!(VariantKindTag, Unnamed, 3);
 
 /// Struct body shape.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(u8)]
 pub enum StructShapeTag {
   Named = 0,
@@ -324,7 +310,7 @@ impl_from_u8!(StructShapeTag, Unit, 3);
 /// Flat field record (child of struct/variant).
 /// `TyIdent` is the field type's ident (e.g., `Ident<4>` for `bool`,
 /// `OptionIdent<Ident<6>>` for `Option<Center>`).
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(C, packed)]
 pub struct FlatField<const IDENT: usize, const WIRE: usize, TyIdent: Copy> {
   pub ident: Ident<IDENT>,
@@ -336,7 +322,7 @@ pub struct FlatField<const IDENT: usize, const WIRE: usize, TyIdent: Copy> {
 
 /// Flat variant record (child of enum). Contains its own fields inline
 /// via the `Fields` type parameter.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(C, packed)]
 pub struct FlatVariant<const IDENT: usize, const WIRE: usize, Fields: Copy = Types0> {
   pub ident: Ident<IDENT>,
@@ -349,14 +335,14 @@ pub struct FlatVariant<const IDENT: usize, const WIRE: usize, Fields: Copy = Typ
 
 // -- Top-level schema records ------------------------------------------
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(C, packed)]
 pub struct FlatNative<const N: usize> {
   pub tag: Tag,
   pub name: Ident<N>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(C, packed)]
 pub struct FlatPrimitive {
   pub tag: Tag,
@@ -366,7 +352,7 @@ pub struct FlatPrimitive {
 /// Struct record. Fields are embedded inline via the `Fields` type
 /// parameter (a `Types{N}` of `FlatField`s for named, ident arrays
 /// for tuple).
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(C, packed)]
 pub struct FlatStruct<const IDENT: usize, Fields: Copy = Types0> {
   pub tag: Tag,
@@ -379,7 +365,7 @@ pub struct FlatStruct<const IDENT: usize, Fields: Copy = Types0> {
 }
 
 /// Transparent (newtype) record.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(C, packed)]
 pub struct FlatTransparent<const IDENT: usize, InnerIdent: Copy> {
   pub tag: Tag,
@@ -390,7 +376,7 @@ pub struct FlatTransparent<const IDENT: usize, InnerIdent: Copy> {
 
 /// Enum record. Variants are embedded inline via the `Variants` type
 /// parameter (a `Types{N}` of `FlatVariant`s).
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(C, packed)]
 pub struct FlatEnum<
   const IDENT: usize,
@@ -410,7 +396,7 @@ pub struct FlatEnum<
 }
 
 /// `IntoProxy` record (`#[serde(into = "X")]`).
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(C, packed)]
 pub struct FlatIntoProxy<const IDENT: usize, ProxyIdent: Copy> {
   pub tag: Tag,
@@ -420,7 +406,7 @@ pub struct FlatIntoProxy<const IDENT: usize, ProxyIdent: Copy> {
 }
 
 /// `FromProxy` record (`#[serde(from/try_from = "X")]`).
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(C, packed)]
 pub struct FlatFromProxy<const IDENT: usize, ProxyIdent: Copy> {
   pub tag: Tag,
@@ -436,7 +422,7 @@ pub struct FlatFromProxy<const IDENT: usize, ProxyIdent: Copy> {
 // heterogeneous children (fields, variants, or idents) inline in a
 // parent record. The extractor reads them sequentially by byte offset.
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(C, packed)]
 #[expect(
   clippy::empty_structs_with_brackets,
@@ -447,6 +433,7 @@ pub struct Types0();
 macro_rules! define_types {
     ($($name:ident<$($T:ident),+>;)*) => {$(
         #[derive(Clone, Copy)]
+        #[derive(zerocopy::IntoBytes, zerocopy::Immutable)]
         #[repr(C, packed)]
         pub struct $name<$($T: Copy),+>($(pub $T),+);
     )*};

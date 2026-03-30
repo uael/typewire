@@ -34,6 +34,8 @@
 
 mod scalar;
 
+pub use zerocopy;
+
 /// Binary format types — always available.
 pub mod coded;
 
@@ -119,6 +121,23 @@ bitflags! {
         const ALL_UNIT = 1 << 1;
     }
 }
+
+// SAFETY: bitflags! generates #[repr(transparent)] wrappers around u8,
+// so every bit pattern is a valid byte sequence with no padding.
+macro_rules! impl_zerocopy_for_flags {
+  ($($ty:ident),*) => { $(
+    // SAFETY: #[repr(transparent)] around u8.
+    unsafe impl zerocopy::IntoBytes for $ty {
+      fn only_derive_is_allowed_to_implement_this_trait() {}
+    }
+    // SAFETY: #[repr(transparent)] around u8.
+    unsafe impl zerocopy::Immutable for $ty {
+      fn only_derive_is_allowed_to_implement_this_trait() {}
+    }
+  )* };
+}
+
+impl_zerocopy_for_flags!(FieldFlags, VariantFlags, StructFlags, EnumFlags);
 
 // ---------------------------------------------------------------------------
 // Schema — the type metadata used by both encode and decode stages

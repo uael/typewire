@@ -2,7 +2,7 @@
 ///
 /// Each variant maps to a primitive Rust type or a well-known domain type
 /// for which `typewire` provides a built-in `Typewire` implementation.
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[expect(non_camel_case_types, reason = "Named after the Rust types they represent.")]
 #[repr(u8)]
 pub enum Scalar {
