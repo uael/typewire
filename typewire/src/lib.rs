@@ -375,7 +375,7 @@ impl Typewire for usize {
     #[expect(
       clippy::cast_possible_truncation,
       clippy::cast_sign_loss,
-      reason = "on wasm32, usize == u32, validated by round-trip"
+      reason = "on wasm32, usize is u32 — fits exactly in f64"
     )]
     Ok(n as Self)
   }
@@ -406,7 +406,7 @@ impl Typewire for isize {
     let n = wasm::as_safe_f64(&value).ok_or(Error::UnexpectedType { expected: "number" })?;
     #[expect(
       clippy::cast_possible_truncation,
-      reason = "on wasm32, isize == i32, validated by round-trip"
+      reason = "on wasm32, isize is i32 — fits exactly in f64"
     )]
     Ok(n as Self)
   }

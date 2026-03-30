@@ -50,6 +50,13 @@ fn emit_struct(s: &Struct, out: &mut String) {
           continue;
         }
         let ts_type = ty_to_ts(&f.ty);
+        // A field is optional in TypeScript only when it has an explicit
+        // `#[serde(default)]` or `#[serde(default = "...")]`. Note that
+        // `Option<T>` fields without `default` are emitted as required
+        // (`field: T | null`) — this matches serde's deserialization
+        // semantics. At runtime, typewire's `or_default()` makes them
+        // tolerant of absence, but the schema reflects the stricter
+        // serde contract.
         let optional = !matches!(f.default, FieldDefault::None);
         let opt = if optional { "?" } else { "" };
         let _ = writeln!(out, "  {}{}: {};", f.wire_name, opt, ts_type);

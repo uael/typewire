@@ -734,7 +734,7 @@ fn ext_tagged_patch_js(e: &SchemaEnum) -> TokenStream {
       }
       match self {
         #(#arms)*
-        #[allow(unreachable_patterns)]
+        #[expect(unreachable_patterns, reason = "wasm-only variants may be skipped")]
         _ => { _set(self.to_js()); }
       }
     }
@@ -955,7 +955,7 @@ fn int_tagged_patch_js(e: &SchemaEnum, tag: &str) -> TokenStream {
         .and_then(|v| v.as_string());
       match self {
         #(#arms)*
-        #[allow(unreachable_patterns)]
+        #[expect(unreachable_patterns, reason = "wasm-only variants may be skipped")]
         _ => { _set(self.to_js()); }
       }
     }
@@ -1231,7 +1231,7 @@ fn adj_tagged_patch_js(e: &SchemaEnum, tag: &str, content: &str) -> TokenStream 
         .and_then(|v| v.as_string());
       match self {
         #(#arms)*
-        #[allow(unreachable_patterns)]
+        #[expect(unreachable_patterns, reason = "wasm-only variants may be skipped")]
         _ => { _set(self.to_js()); }
       }
     }

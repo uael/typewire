@@ -302,8 +302,14 @@ fn get_lit_str(meta: &ParseNestedMeta<'_>) -> syn::Result<LitStr> {
 }
 
 fn skip_meta_value(meta: &ParseNestedMeta<'_>) {
-  // Consume the `= "..."` or `(...)` if present, so the parser advances.
+  // Consume the `= "..."` if present, so the parser advances.
   if let Ok(value) = meta.value() {
     let _ = value.parse::<Expr>();
+  } else {
+    // Consume parenthesized groups like `bound(serialize = "...")`.
+    let _ = meta.parse_nested_meta(|nested| {
+      skip_meta_value(&nested);
+      Ok(())
+    });
   }
 }
