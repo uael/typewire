@@ -1,0 +1,21 @@
+error[E0599]: the function or associated item `or_default` exists for struct `Wrapper<NotTypewire>`, but its trait bounds were not satisfied
+  --> tests/compile_fail/generic_missing_typewire_bound.rs:12:29
+   |
+ 3 | struct NotTypewire;
+   | ------------------ doesn't satisfy `NotTypewire: Typewire`
+...
+ 6 | struct Wrapper<T> {
+   | ----------------- function or associated item `or_default` not found for this struct because it doesn't satisfy `Wrapper<NotTypewire>: Typewire`
+...
+12 |     Wrapper::<NotTypewire>::or_default()
+   |                             ^^^^^^^^^^ function or associated item cannot be called on `Wrapper<NotTypewire>` due to unsatisfied trait bounds
+   |
+   = note: trait bound `NotTypewire: Typewire` was not satisfied
+note: the trait `Typewire` must be implemented
+  --> src/lib.rs
+   |
+   | pub trait Typewire: Sized {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^
+   = help: items from traits can only be used if the trait is implemented and in scope
+   = note: the following trait defines an item `or_default`, perhaps you need to implement it:
+           candidate #1: `Typewire`

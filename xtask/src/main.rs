@@ -56,6 +56,34 @@ fn fmt(sh: &Shell, check: bool) -> Result<()> {
 fn lint(sh: &Shell, fix: bool) -> Result<()> {
   let args =
     if fix { ["--fix", "--allow-dirty", "--allow-staged"] } else { ["--", "-D", "warnings"] };
-  cmd!(sh, "cargo clippy --tests --all-features {args...}").run_echo()?;
+
+  // typewire-schema's `syn` and `codegen` features are mutually exclusive,
+  // so we lint each meaningful feature combination separately.
+
+  // Workspace with default features (typewire[derive], typewire-schema[syn]).
+  cmd!(sh, "cargo clippy --tests {args...}").run_echo()?;
+
+  // typewire-schema: no features (coded only).
+  cmd!(sh, "cargo clippy -p typewire-schema --tests --no-default-features {args...}").run_echo()?;
+
+  // typewire-schema: syn path (encode).
+  cmd!(sh, "cargo clippy -p typewire-schema --tests --features syn {args...}").run_echo()?;
+
+  // typewire-schema: typescript path (decode + codegen, no syn).
+  cmd!(sh, "cargo clippy -p typewire-schema --tests --features typescript {args...}").run_echo()?;
+
+  // typewire: no features (no derive, no optional deps).
+  cmd!(sh, "cargo clippy -p typewire --no-default-features {args...}").run_echo()?;
+
+  // typewire: all optional type features.
+  let type_features = "uuid,fractional_index,chrono,url,indexmap,bytes,base64,serde_json";
+  cmd!(sh, "cargo clippy -p typewire --tests --features {type_features} {args...}").run_echo()?;
+
+  // typewire: cli feature without derive (codegen/typescript path).
+  cmd!(sh, "cargo clippy -p typewire --no-default-features --features cli {args...}").run_echo()?;
+
+  // typewire-derive.
+  cmd!(sh, "cargo clippy -p typewire-derive --tests {args...}").run_echo()?;
+
   fmt(sh, !fix)
 }

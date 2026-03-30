@@ -1,0 +1,6 @@
+error: transparent struct must have exactly one field
+ --> tests/compile_fail/transparent_multi_tuple.rs:4:1
+  |
+4 | / #[serde(transparent)]
+5 | | struct Bad(u32, String);
+  | |________________________^

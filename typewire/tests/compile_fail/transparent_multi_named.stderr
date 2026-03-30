@@ -1,0 +1,9 @@
+error: transparent struct must have exactly one field
+ --> tests/compile_fail/transparent_multi_named.rs:4:1
+  |
+4 | / #[serde(transparent)]
+5 | | struct Bad {
+6 | |     a: u32,
+7 | |     b: String,
+8 | | }
+  | |_^

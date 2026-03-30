@@ -1,0 +1,9 @@
+error: transparent is not supported on enums
+ --> tests/compile_fail/transparent_enum.rs:4:1
+  |
+4 | / #[serde(transparent)]
+5 | | enum Bad {
+6 | |     A(u32),
+7 | |     B(String),
+8 | | }
+  | |_^

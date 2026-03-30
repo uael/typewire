@@ -1,0 +1,8 @@
+error: Typewire cannot be derived for unions
+ --> tests/compile_fail/union.rs:4:1
+  |
+4 | / union Bad {
+5 | |     a: u32,
+6 | |     b: f32,
+7 | | }
+  | |_^

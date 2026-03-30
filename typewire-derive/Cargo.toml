@@ -14,9 +14,10 @@ readme = "../README.md"
 proc-macro = true
 
 [dependencies]
-syn = { version = "2", features = ["full"] }
-quote = "1"
+typewire-schema = { version = "=0.0.1", path = "../typewire-schema", features = ["syn"] }
 proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full", "parsing", "proc-macro"] }
 
 [lints]
 workspace = true

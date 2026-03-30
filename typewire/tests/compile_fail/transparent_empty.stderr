@@ -1,0 +1,6 @@
+error: transparent struct must have exactly one field
+ --> tests/compile_fail/transparent_empty.rs:4:1
+  |
+4 | / #[serde(transparent)]
+5 | | struct Empty;
+  | |_____________^
