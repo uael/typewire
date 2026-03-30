@@ -3,6 +3,8 @@
 //! Generates `.d.ts` content from [`Schema`] values parsed by
 //! [`decode::parse_section`](crate::decode::parse_section).
 
+// `writeln!` results are discarded throughout this module because the target
+// is always `String`, whose `fmt::Write` impl is infallible.
 use std::fmt::Write;
 
 use crate::{
@@ -27,12 +29,10 @@ pub fn generate<'a>(schemas: impl IntoIterator<Item = &'a Schema>) -> String {
       Schema::Transparent(t) => emit_transparent(t, &mut out),
       Schema::Enum(e) => emit_enum(e, &mut out),
       Schema::IntoProxy(p) => {
-        let ts = ty_to_ts(&Schema::Native(p.into_ty.clone()));
-        let _ = writeln!(out, "export type {} = {ts};\n", p.ident);
+        let _ = writeln!(out, "export type {} = {};\n", p.ident, p.into_ty);
       }
       Schema::FromProxy(p) => {
-        let ts = ty_to_ts(&Schema::Native(p.proxy.clone()));
-        let _ = writeln!(out, "export type {} = {ts};\n", p.ident);
+        let _ = writeln!(out, "export type {} = {};\n", p.ident, p.proxy);
       }
       _ => {}
     }

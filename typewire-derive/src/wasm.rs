@@ -222,6 +222,7 @@ fn struct_to_js_body(s: &SchemaStruct) -> TokenStream {
                 let entries = ::js_sys::Object::entries(inner_obj);
                 for i in 0..entries.length() {
                   let pair: ::js_sys::Array = entries.get(i).into();
+                  // Reflect::set on a plain Object is infallible — safe to discard.
                   let _ = ::js_sys::Reflect::set(&obj, &pair.get(0), &pair.get(1));
                 }
               }
@@ -326,7 +327,8 @@ fn struct_from_js_body(s: &SchemaStruct) -> TokenStream {
     StructShape::Tuple(types) => {
       let bindings = types.iter().enumerate().map(|(i, ty)| {
         let var = format_ident!("__field{i}");
-        let idx = u32::try_from(i).unwrap();
+        #[expect(clippy::cast_possible_truncation, reason = "field index always fits u32")]
+        let idx = i as u32;
         quote! {
           let #var = <#ty as ::typewire::Typewire>::from_js(arr.get(#idx))?;
         }
@@ -374,7 +376,8 @@ fn struct_patch_js_fn(s: &SchemaStruct) -> TokenStream {
       let patches: Vec<_> = (0..types.len())
         .map(|i| {
           let idx = Index::from(i);
-          let js_idx = u32::try_from(i).unwrap();
+          #[expect(clippy::cast_possible_truncation, reason = "field index always fits u32")]
+          let js_idx = i as u32;
           quote! {
             self.#idx.patch_js(&__arr.get(#js_idx), |v| __arr.set(#js_idx, v));
           }
@@ -1086,7 +1089,8 @@ fn adj_tagged_from_js(e: &SchemaEnum, tag: &str, content: &str) -> TokenStream {
         VariantKind::Unnamed(types) => {
           let bindings = types.iter().enumerate().map(|(i, ty)| {
             let var = format_ident!("__f{i}");
-            let idx = u32::try_from(i).unwrap();
+            #[expect(clippy::cast_possible_truncation, reason = "field index always fits u32")]
+            let idx = i as u32;
             quote! { let #var = <#ty as ::typewire::Typewire>::from_js(arr.get(#idx))?; }
           });
           let vars: Vec<_> = (0..types.len())
@@ -1317,14 +1321,18 @@ fn untagged_from_js(e: &SchemaEnum) -> TokenStream {
           }
         }
         VariantKind::Unnamed(types) => {
-          let len = types.len();
           let bindings = types.iter().enumerate().map(|(i, ty)| {
             let var = format_ident!("__f{i}");
-            let idx = u32::try_from(i).unwrap();
+            #[expect(clippy::cast_possible_truncation, reason = "field index always fits u32")]
+            let idx = i as u32;
             quote! { let #var = <#ty as ::typewire::Typewire>::from_js(arr.get(#idx))?; }
           });
-          let vars: Vec<_> = (0..len).map(|i| format_ident!("__f{i}")).collect();
-          let len_u32 = u32::try_from(len).unwrap();
+          let vars: Vec<_> = (0..types.len()).map(|i| format_ident!("__f{i}")).collect();
+          #[expect(
+            clippy::cast_possible_truncation,
+            reason = "variant field count always fits u32"
+          )]
+          let len_u32 = types.len() as u32;
           quote! {
             if let Ok(arr) = ::core::convert::TryInto::<::js_sys::Array>::try_into(value.clone()) {
               if arr.length() == #len_u32 {
@@ -1619,7 +1627,8 @@ fn unnamed_variant_from_js_ext(
   } else {
     let bindings = types.iter().enumerate().map(|(i, ty)| {
       let var = format_ident!("__f{i}");
-      let idx = u32::try_from(i).unwrap();
+      #[expect(clippy::cast_possible_truncation, reason = "field index always fits u32")]
+      let idx = i as u32;
       quote! { let #var = <#ty as ::typewire::Typewire>::from_js(arr.get(#idx))?; }
     });
     let vars: Vec<_> = (0..types.len()).map(|i| format_ident!("__f{i}")).collect();
@@ -1751,10 +1760,15 @@ fn untagged_variant_fallbacks(name: &Ident, variants: &[SchemaVariant]) -> Vec<T
           }
         }
         VariantKind::Unnamed(types) => {
-          let len = u32::try_from(types.len()).unwrap();
+          #[expect(
+            clippy::cast_possible_truncation,
+            reason = "variant field count always fits u32"
+          )]
+          let len = types.len() as u32;
           let bindings = types.iter().enumerate().map(|(i, ty)| {
             let var = format_ident!("__f{i}");
-            let idx = u32::try_from(i).unwrap();
+            #[expect(clippy::cast_possible_truncation, reason = "field index always fits u32")]
+            let idx = i as u32;
             quote! { let #var = <#ty as ::typewire::Typewire>::from_js(arr.get(#idx))?; }
           });
           let vars: Vec<_> = (0..types.len()).map(|i| format_ident!("__f{i}")).collect();

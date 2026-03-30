@@ -930,3 +930,81 @@ fn test_patch_js_unit_noop() {
   ().patch_js(&JsValue::from_str("anything"), |_| called = true);
   assert!(!called, "unit patch_js should be no-op on string");
 }
+
+// ===========================================================================
+// patch_js: flatten struct
+// ===========================================================================
+
+#[wasm_bindgen_test]
+fn test_patch_js_flatten_unchanged() {
+  let val = FlattenPatchStruct { name: "test".into(), inner: Inner { x: 1, y: 2 } };
+  let js = val.to_js();
+  val.patch_js(&js, |_| panic!("same value should not replace"));
+  assert_eq!(
+    js_sys::Reflect::get(&js, &JsValue::from_str("x")).unwrap_throw().as_f64().unwrap_throw(),
+    1.0
+  );
+}
+
+#[wasm_bindgen_test]
+fn test_patch_js_flatten_inner_change() {
+  let old = FlattenPatchStruct { name: "test".into(), inner: Inner { x: 1, y: 2 } };
+  let js = old.to_js();
+  let new = FlattenPatchStruct { name: "test".into(), inner: Inner { x: 99, y: 2 } };
+  new.patch_js(&js, |_| panic!("should patch in place"));
+  assert_eq!(
+    js_sys::Reflect::get(&js, &JsValue::from_str("x")).unwrap_throw().as_f64().unwrap_throw(),
+    99.0
+  );
+  assert_eq!(
+    js_sys::Reflect::get(&js, &JsValue::from_str("y")).unwrap_throw().as_f64().unwrap_throw(),
+    2.0
+  );
+}
+
+#[wasm_bindgen_test]
+fn test_patch_js_flatten_name_change() {
+  let old = FlattenPatchStruct { name: "old".into(), inner: Inner { x: 1, y: 2 } };
+  let js = old.to_js();
+  let new = FlattenPatchStruct { name: "new".into(), inner: Inner { x: 1, y: 2 } };
+  new.patch_js(&js, |_| panic!("should patch in place"));
+  assert_eq!(
+    js_sys::Reflect::get(&js, &JsValue::from_str("name")).unwrap_throw().as_string().unwrap_throw(),
+    "new"
+  );
+}
+
+// ===========================================================================
+// patch_js: Option<Vec<T>> identity changes
+// ===========================================================================
+
+#[wasm_bindgen_test]
+fn test_patch_js_option_vec_none_to_some() {
+  let old = OptVecStruct { items: None };
+  let js = old.to_js();
+  let new = OptVecStruct { items: Some(vec![1, 2, 3]) };
+  new.patch_js(&js, |_| panic!("should patch in place"));
+  let items = js_sys::Reflect::get(&js, &JsValue::from_str("items")).unwrap_throw();
+  assert!(!items.is_null(), "items should now be an array");
+}
+
+#[wasm_bindgen_test]
+fn test_patch_js_option_vec_some_to_none() {
+  let old = OptVecStruct { items: Some(vec![1, 2]) };
+  let js = old.to_js();
+  let new = OptVecStruct { items: None };
+  new.patch_js(&js, |_| panic!("should patch in place"));
+  let items = js_sys::Reflect::get(&js, &JsValue::from_str("items")).unwrap_throw();
+  assert!(items.is_null(), "items should now be null");
+}
+
+#[wasm_bindgen_test]
+fn test_patch_js_option_vec_change_contents() {
+  let old = OptVecStruct { items: Some(vec![1, 2]) };
+  let js = old.to_js();
+  let new = OptVecStruct { items: Some(vec![1, 2, 3]) };
+  new.patch_js(&js, |_| panic!("should patch in place"));
+  let items = js_sys::Reflect::get(&js, &JsValue::from_str("items")).unwrap_throw();
+  let arr: js_sys::Array = items.into();
+  assert_eq!(arr.length(), 3);
+}

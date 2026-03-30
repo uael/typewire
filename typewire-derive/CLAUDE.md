@@ -30,6 +30,8 @@ All attributes below work under `#[serde(...)]`, `#[diffable(...)]`, or `#[typew
 
 **Container:** `rename_all`, `rename_all_fields`, `tag`, `content`, `untagged`, `transparent`, `default`, `deny_unknown_fields`, `from`, `try_from`, `into`, `atomic`, `visit_transparent`
 
+> **Serde divergence:** `#[serde(default)]` on a container uses per-field `Default::default()` fallbacks, **not** the container's `Default` impl. This is intentional — the derive generates independent field fallbacks rather than constructing a default instance and overwriting present fields.
+
 **Variant:** `rename`, `alias`, `rename_all`, `skip`, `skip_serializing`, `skip_deserializing`, `other`, `untagged`
 
 **Field:** `rename`, `alias`, `skip`, `default`, `flatten`, `skip_serializing_if`, `with = "serde_bytes"`, `base64`, `display`, `lenient`

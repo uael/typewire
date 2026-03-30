@@ -286,3 +286,21 @@ fn test_const_generic() {
   round_trip(&FixedArray { items: [1, 2, 3] });
   round_trip(&FixedArray::<0> { items: [] });
 }
+
+// ===========================================================================
+// Const generic in enum
+// ===========================================================================
+
+#[derive(Debug, PartialEq, Clone, Typewire)]
+#[serde(tag = "type", content = "data")]
+enum FixedEnum<const N: usize> {
+  Array([u32; N]),
+  Single(u32),
+}
+
+#[wasm_bindgen_test]
+fn test_const_generic_enum() {
+  round_trip(&FixedEnum::Array([1, 2, 3]));
+  round_trip(&FixedEnum::<1>::Single(42));
+  round_trip(&FixedEnum::Array::<0>([]));
+}

@@ -520,3 +520,82 @@ pub enum InnerExternalEnum {
     message: String,
   },
 }
+
+// ===========================================================================
+// patch_js: flatten struct
+// ===========================================================================
+
+#[derive(Debug, PartialEq, Clone, Typewire)]
+pub struct FlattenPatchStruct {
+  pub name: String,
+  #[serde(flatten)]
+  pub inner: Inner,
+}
+
+// ===========================================================================
+// Lenient: proxy types (try_from)
+// ===========================================================================
+
+/// A u32 constrained to [0, 100], used for lenient proxy tests.
+#[derive(Debug, PartialEq, Clone)]
+pub struct Clamped100(pub u32);
+
+impl From<Clamped100> for u32 {
+  fn from(b: Clamped100) -> Self {
+    b.0
+  }
+}
+
+impl TryFrom<u32> for Clamped100 {
+  type Error = String;
+  fn try_from(v: u32) -> Result<Self, Self::Error> {
+    if v <= 100 { Ok(Self(v)) } else { Err(format!("{v} is out of range [0, 100]")) }
+  }
+}
+
+#[derive(Debug, PartialEq, Clone, Typewire)]
+#[serde(try_from = "u32", into = "u32")]
+pub struct Clamped100Wire(#[serde(skip)] pub Clamped100);
+
+impl TryFrom<u32> for Clamped100Wire {
+  type Error = String;
+  fn try_from(v: u32) -> Result<Self, Self::Error> {
+    Clamped100::try_from(v).map(Self)
+  }
+}
+
+impl From<Clamped100Wire> for u32 {
+  fn from(b: Clamped100Wire) -> Self {
+    b.0.0
+  }
+}
+
+#[derive(Debug, PartialEq, Clone, Typewire)]
+pub struct LenientBoundedStruct {
+  #[typewire(lenient)]
+  pub scores: Vec<Clamped100Wire>,
+}
+
+// ===========================================================================
+// Untagged enum: ambiguous variants
+// ===========================================================================
+
+#[derive(Debug, PartialEq, Clone, Typewire)]
+#[serde(untagged)]
+pub enum AmbiguousUntagged {
+  /// Tried first — matches any u32
+  Count(u32),
+  /// Tried second — also wants u32 but won't match because Count wins
+  Amount(u32),
+  /// Fallback for everything else
+  Label(String),
+}
+
+// ===========================================================================
+// Option<Vec<T>> for patch_js identity tests
+// ===========================================================================
+
+#[derive(Debug, PartialEq, Clone, Typewire)]
+pub struct OptVecStruct {
+  pub items: Option<Vec<u32>>,
+}

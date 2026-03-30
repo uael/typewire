@@ -105,8 +105,11 @@ fn test_default_path() {
 fn test_container_default() {
   let js = eval("({})");
   let s = ContainerDefaultStruct::from_js(js).unwrap_throw();
-  assert_eq!(s.name, ""); // Default::default() for String, not ContainerDefaultStruct::default()
-  assert_eq!(s.count, 0); // Default::default() for u32
+  // NOTE: typewire uses per-field Default::default(), not the container's
+  // Default impl.  This diverges from serde (which would yield "default_name"/42)
+  // but is intentional — the derive generates independent field fallbacks.
+  assert_eq!(s.name, "");
+  assert_eq!(s.count, 0);
 }
 
 #[wasm_bindgen_test]

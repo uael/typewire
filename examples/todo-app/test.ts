@@ -93,4 +93,40 @@ const _p3: Priority = "high";
 // Optional field: description is string | null, not string | undefined.
 const _d: string | null = todo.description;
 
+// -- Error paths: invalid inputs should throw ----------------------------------
+
+function assertThrows(fn: () => void, desc: string) {
+  try {
+    fn();
+    assert.fail(`expected error for: ${desc}`);
+  } catch (e) {
+    if (e instanceof assert.AssertionError) throw e;
+    // expected
+  }
+}
+
+// Missing required field (title)
+assertThrows(
+  () => create_todo({ id: 1, completed: false, priority: "high", tags: [] }),
+  "missing required field 'title'",
+);
+
+// Wrong field type (id should be number)
+assertThrows(
+  () => create_todo({ id: "not_a_number", title: "x", completed: false, priority: "high", tags: [] }),
+  "wrong type for 'id'",
+);
+
+// Invalid command type
+assertThrows(
+  () => apply_command({ name: "W", todos: [] }, { type: "Unknown", data: {} }),
+  "unknown command variant",
+);
+
+// Missing command data
+assertThrows(
+  () => apply_command({ name: "W", todos: [] }, { type: "Toggle" }),
+  "missing command data",
+);
+
 console.log("ok: all assertions passed");

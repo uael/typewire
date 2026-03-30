@@ -302,12 +302,12 @@ fn coded_enum(e: &Enum, c: &TokenStream, generic_count: u32) -> (TokenStream, To
   let flags_bits = e.flags.bits();
 
   let (tagging_kind, tag_key_str, content_key_str) = match &e.tagging {
-    Tagging::External => (quote! { #c::TaggingKind::External }, String::new(), String::new()),
-    Tagging::Internal { tag } => (quote! { #c::TaggingKind::Internal }, tag.clone(), String::new()),
+    Tagging::External => (quote! { #c::TaggingKind::External }, "", ""),
+    Tagging::Internal { tag } => (quote! { #c::TaggingKind::Internal }, tag.as_str(), ""),
     Tagging::Adjacent { tag, content } => {
-      (quote! { #c::TaggingKind::Adjacent }, tag.clone(), content.clone())
+      (quote! { #c::TaggingKind::Adjacent }, tag.as_str(), content.as_str())
     }
-    Tagging::Untagged => (quote! { #c::TaggingKind::Untagged }, String::new(), String::new()),
+    Tagging::Untagged => (quote! { #c::TaggingKind::Untagged }, "", ""),
   };
 
   let tag_key_len = tag_key_str.len();

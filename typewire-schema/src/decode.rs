@@ -47,6 +47,8 @@ pub enum Error {
   InvalidUtf8 { offset: usize },
   #[error("truncated record at offset {offset}: declared {declared} bytes, {remaining} remaining")]
   TruncatedRecord { offset: usize, declared: usize, remaining: usize },
+  #[error("expected named type identifier, got compound type reference")]
+  ExpectedNamedType,
 }
 
 // ---------------------------------------------------------------------------
@@ -87,8 +89,16 @@ impl<'a> Reader<'a> {
     }
   }
 
+  fn read_count(&mut self) -> Result<usize, Error> {
+    let n = self.read_u32_le()? as usize;
+    if n > self.remaining() {
+      return Err(Error::UnexpectedEof { needed: n, remaining: self.remaining() });
+    }
+    Ok(n)
+  }
+
   fn read_ident_str(&mut self) -> Result<String, Error> {
-    let len = self.read_u32_le()? as usize;
+    let len = self.read_count()?;
     if self.pos + len > self.data.len() {
       return Err(Error::UnexpectedEof { needed: len, remaining: self.remaining() });
     }
@@ -217,7 +227,7 @@ fn parse_struct(r: &mut Reader<'_>) -> Result<Schema, Error> {
   let raw = r.read_u8()?;
   let shape_tag = StructShapeTag::from_u8(raw).ok_or(Error::InvalidStructShape(raw))?;
   let _generic_count = r.read_u32_le()?;
-  let field_count = r.read_u32_le()? as usize;
+  let field_count = r.read_count()?;
 
   let shape = match shape_tag {
     StructShapeTag::Named => {
@@ -261,7 +271,7 @@ fn parse_enum(r: &mut Reader<'_>) -> Result<Schema, Error> {
   let tag_key = r.read_ident_str()?;
   let content_key = r.read_ident_str()?;
   let _generic_count = r.read_u32_le()?;
-  let variant_count = r.read_u32_le()? as usize;
+  let variant_count = r.read_count()?;
 
   let tagging = match tagging_kind {
     TaggingKind::External => Tagging::External,
@@ -285,7 +295,7 @@ fn parse_into_proxy(r: &mut Reader<'_>) -> Result<Schema, Error> {
   Ok(Schema::IntoProxy(crate::IntoProxy {
     ident,
     generics: Vec::new(),
-    into_ty: into_ty.ident().unwrap_or("").to_string(),
+    into_ty: into_ty.ident().ok_or(Error::ExpectedNamedType)?.to_string(),
   }))
 }
 
@@ -297,7 +307,7 @@ fn parse_from_proxy(r: &mut Reader<'_>) -> Result<Schema, Error> {
   Ok(Schema::FromProxy(crate::FromProxy {
     ident,
     generics: Vec::new(),
-    proxy: proxy.ident().unwrap_or("").to_string(),
+    proxy: proxy.ident().ok_or(Error::ExpectedNamedType)?.to_string(),
     is_try,
   }))
 }
@@ -310,12 +320,15 @@ fn parse_flat_field(r: &mut Reader<'_>) -> Result<Field, Error> {
   let raw = r.read_u8()?;
   let default_kind = FieldDefaultKind::from_u8(raw).ok_or(Error::InvalidFieldDefault(raw))?;
 
+  // The binary format does not encode the default function path, so both
+  // `#[serde(default)]` and `#[serde(default = "path")]` decode as
+  // `FieldDefault::Default`. TypeScript codegen cannot distinguish the two.
   let default = match default_kind {
     FieldDefaultKind::None => FieldDefault::None,
     FieldDefaultKind::Default | FieldDefaultKind::Path => FieldDefault::Default,
   };
 
-  let alias_count = r.read_u32_le()? as usize;
+  let alias_count = r.read_count()?;
   let mut aliases = Vec::with_capacity(alias_count);
   for _ in 0..alias_count {
     aliases.push(r.read_ident_str()?);
@@ -330,7 +343,7 @@ fn parse_flat_variant(r: &mut Reader<'_>) -> Result<Variant, Error> {
   let flags = VariantFlags::from_bits_retain(r.read_u8()?);
   let raw = r.read_u8()?;
   let kind_tag = VariantKindTag::from_u8(raw).ok_or(Error::InvalidVariantKind(raw))?;
-  let child_count = r.read_u32_le()? as usize;
+  let child_count = r.read_count()?;
 
   let kind = match kind_tag {
     VariantKindTag::Unit => VariantKind::Unit,
@@ -350,7 +363,7 @@ fn parse_flat_variant(r: &mut Reader<'_>) -> Result<Variant, Error> {
     }
   };
 
-  let alias_count = r.read_u32_le()? as usize;
+  let alias_count = r.read_count()?;
   let mut all_wire_names = Vec::with_capacity(1 + alias_count);
   all_wire_names.push(wire_name.clone());
   for _ in 0..alias_count {

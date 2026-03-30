@@ -57,10 +57,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         module.customs.delete(id);
       }
       let stripped = module.emit_wasm();
-      std::fs::write(&cli.binary, stripped)?;
+      // Write to a temporary file then rename for crash-safe replacement.
+      let tmp = cli.binary.with_extension("typewire-tmp");
+      std::fs::write(&tmp, stripped)?;
+      std::fs::rename(&tmp, &cli.binary)?;
     } else {
       eprintln!(
-        "warning: stripping is only supported for WASM binaries, skipping for {}",
+        "warning: stripping is only supported for WASM binaries, skipping for {} (use --no-strip to silence)",
         cli.binary.display()
       );
     }

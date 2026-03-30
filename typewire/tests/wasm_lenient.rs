@@ -377,3 +377,30 @@ fn test_derive_strict_option_fails_on_invalid() {
     "non-lenient option should fail on invalid inner value"
   );
 }
+
+// ===========================================================================
+// from_js_lenient — proxy types (try_from)
+// ===========================================================================
+
+#[wasm_bindgen_test]
+fn test_lenient_vec_proxy_valid() {
+  // All values within [0, 100] — should all pass
+  let js = eval(r#"({"scores": [10, 50, 100]})"#);
+  let result = LenientBoundedStruct::from_js(js).unwrap_throw();
+  assert_eq!(result.scores.len(), 3);
+}
+
+#[wasm_bindgen_test]
+fn test_lenient_vec_proxy_some_out_of_range() {
+  // 200 is out of range for BoundedU32 [0, 100] — should be skipped in lenient mode
+  let js = eval(r#"({"scores": [10, 200, 50]})"#);
+  let result = LenientBoundedStruct::from_js(js).unwrap_throw();
+  assert_eq!(result.scores.len(), 2, "out-of-range value should be skipped in lenient vec");
+}
+
+#[wasm_bindgen_test]
+fn test_lenient_vec_proxy_all_out_of_range() {
+  let js = eval(r#"({"scores": [200, 300, 999]})"#);
+  let result = LenientBoundedStruct::from_js(js).unwrap_throw();
+  assert!(result.scores.is_empty(), "all out-of-range → empty vec");
+}

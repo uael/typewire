@@ -201,3 +201,29 @@ fn test_untagged_no_matching_variant_error_message() {
     "untagged enum should report 'no matching variant': {msg}"
   );
 }
+
+// ===========================================================================
+// Untagged enum: ambiguous variants (first-match wins)
+// ===========================================================================
+
+#[wasm_bindgen_test]
+fn test_untagged_ambiguous_first_match_wins() {
+  // Both Count(u32) and Amount(u32) accept a number — first one (Count) wins
+  let val = AmbiguousUntagged::from_js(JsValue::from_f64(42.0)).unwrap_throw();
+  assert_eq!(val, AmbiguousUntagged::Count(42));
+}
+
+#[wasm_bindgen_test]
+fn test_untagged_ambiguous_fallback() {
+  // A string doesn't match u32 variants, falls through to Label
+  let val = AmbiguousUntagged::from_js(JsValue::from_str("hello")).unwrap_throw();
+  assert_eq!(val, AmbiguousUntagged::Label("hello".into()));
+}
+
+#[wasm_bindgen_test]
+fn test_untagged_ambiguous_no_match() {
+  // boolean matches neither u32 nor String
+  let err = AmbiguousUntagged::from_js(JsValue::TRUE).unwrap_err();
+  let msg = err.to_string();
+  assert!(msg.contains("no matching variant"), "should report no matching variant: {msg}");
+}

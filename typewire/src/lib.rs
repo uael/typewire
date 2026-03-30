@@ -654,13 +654,13 @@ pub fn patch_js_slice<'a, T: Typewire + 'a>(
   new: impl ExactSizeIterator<Item = &'a T> + Clone,
   old: &wasm_bindgen::JsValue,
   set: impl FnOnce(wasm_bindgen::JsValue),
-) -> bool {
+) {
   use similar::algorithms::{Capture, Compact, Replace as SimilarReplace};
   use wasm_bindgen::JsCast as _;
 
   let Some(arr) = old.dyn_ref::<js_sys::Array>() else {
     set(array_ref(new));
-    return false;
+    return;
   };
 
   let old_len = arr.length() as usize;
@@ -672,7 +672,7 @@ pub fn patch_js_slice<'a, T: Typewire + 'a>(
       let idx = wasm::as_u32(i);
       elem.patch_js(&arr.get(idx), |val| arr.set(idx, val));
     }
-    return false;
+    return;
   }
 
   // Collect old JS references
@@ -740,8 +740,6 @@ pub fn patch_js_slice<'a, T: Typewire + 'a>(
       }
     }
   }
-
-  true
 }
 
 macro_rules! impl_typewire_deref {
@@ -889,6 +887,8 @@ impl<K: Typewire + Eq + core::hash::Hash, V: Typewire, S: ::std::hash::BuildHash
   fn to_js(&self) -> wasm_bindgen::JsValue {
     let obj = js_sys::Object::new();
     for (k, v) in self {
+      // Reflect::set on a plain Object is infallible — safe to discard the result.
+      // This applies to all `let _ = Reflect::set(...)` calls throughout this crate.
       let _ = js_sys::Reflect::set(&obj, &k.to_js(), &v.to_js());
     }
     obj.into()
@@ -903,7 +903,8 @@ impl<K: Typewire + Eq + core::hash::Hash, V: Typewire, S: ::std::hash::BuildHash
     let mut map = Self::default();
     map.reserve(entries.length() as usize);
     for i in 0..entries.length() {
-      let pair: js_sys::Array = entries.get(i).into();
+      let pair: js_sys::Array =
+        entries.get(i).dyn_into().map_err(|_| Error::UnexpectedType { expected: "array" })?;
       let key = K::from_js(pair.get(0))?;
       let val = V::from_js(pair.get(1))?;
       map.insert(key, val);
@@ -1176,7 +1177,16 @@ impl Typewire for serde_json::Value {
     match self {
       Self::Null => wasm_bindgen::JsValue::NULL,
       Self::Bool(b) => wasm_bindgen::JsValue::from_bool(*b),
-      Self::Number(n) => wasm_bindgen::JsValue::from_f64(n.as_f64().unwrap_or(f64::NAN)),
+      // serde_json::Number always represents a finite JSON number, so as_f64()
+      // only returns None for values outside f64 range (extremely rare). Fall
+      // back to 0.0 and log rather than silently producing NaN.
+      Self::Number(n) => {
+        let v = n.as_f64().unwrap_or_else(|| {
+          log::warn!("serde_json::Number {n} is not representable as f64, using 0.0");
+          0.0
+        });
+        wasm_bindgen::JsValue::from_f64(v)
+      }
       Self::String(s) => wasm_bindgen::JsValue::from_str(s),
       Self::Array(arr) => array_ref(arr.iter()),
       Self::Object(map) => {
@@ -1415,7 +1425,8 @@ impl<K: Typewire + Eq + core::hash::Hash, V: Typewire> Typewire for indexmap::In
     );
     let mut map = Self::with_capacity(entries.length() as usize);
     for i in 0..entries.length() {
-      let pair: js_sys::Array = entries.get(i).into();
+      let pair: js_sys::Array =
+        entries.get(i).dyn_into().map_err(|_| Error::UnexpectedType { expected: "array" })?;
       let key = K::from_js(pair.get(0))?;
       let val = V::from_js(pair.get(1))?;
       map.insert(key, val);

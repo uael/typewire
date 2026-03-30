@@ -81,6 +81,9 @@ impl ContainerAttrs {
 
   pub fn from_attrs(attrs: &[Attribute]) -> Self {
     let mut out = Self::default();
+    // parse_nested_meta errors are intentionally discarded — unknown or
+    // unrecognised attributes (e.g. `bound`, `remote`) are silently skipped
+    // for serde compatibility.  This also means typos go undetected.
     for attr in diffable_attrs(attrs).chain(typewire_attrs(attrs)) {
       let _ = attr.parse_nested_meta(|meta| {
         if meta.path.is_ident("atomic") {
