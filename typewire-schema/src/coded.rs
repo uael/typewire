@@ -13,13 +13,13 @@
 //! ...
 //! ```
 //!
-//! Each record starts with a [`Tag`] byte identifying its kind (Struct,
-//! Enum, Transparent, etc.). String identifiers use [`Ident<N>`](Ident) —
+//! Each record starts with a `Tag` byte identifying its kind (Struct,
+//! Enum, Transparent, etc.). String identifiers use `Ident<N>` —
 //! a u32le length prefix followed by UTF-8 bytes. Type references use
-//! compound ident wrappers ([`OptionIdent`], [`SeqIdent`], [`MapIdent`],
+//! compound ident wrappers (`OptionIdent`, `SeqIdent`, `MapIdent`,
 //! etc.) that compose inner idents recursively.
 //!
-//! The extractor (see [`decode`](crate::decode)) reads these records back
+//! The extractor (see the `decode` module) reads these records back
 //! into [`Schema`](crate::Schema) values.
 //!
 //! # Disambiguation of type idents

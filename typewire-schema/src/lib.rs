@@ -19,18 +19,18 @@
 //!    `Copy`, const-constructible types that linkers concatenate into a single
 //!    `typewire_schemas` section.
 //!
-//! 3. **`codegen`** — The [`decode`] module reads link-section bytes back into
+//! 3. **`codegen`** — The `decode` module reads link-section bytes back into
 //!    [`Schema`] values with owned data. Language-specific emitters (e.g.
-//!    [`typescript`]) consume these to generate bindings.
+//!    `typescript`) consume these to generate bindings.
 //!
 //! # Modules
 //!
 //! | Module | Feature | Purpose |
 //! |--------|---------|---------|
 //! | [`coded`] | *(always)* | Binary format types for link-section embedding |
-//! | [`encode`] | `syn` | `Schema` → `TokenStream` (link-section record construction) |
-//! | [`decode`] | `codegen` | Link-section bytes → `Schema` |
-//! | [`typescript`] | `typescript` | `Schema` → `.d.ts` declarations |
+//! | `encode` | `syn` | `Schema` → `TokenStream` (link-section record construction) |
+//! | `decode` | `codegen` | Link-section bytes → `Schema` |
+//! | `typescript` | `typescript` | `Schema` → `.d.ts` declarations |
 
 mod scalar;
 
