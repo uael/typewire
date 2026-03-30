@@ -80,7 +80,7 @@ pub fn generate_schema_and_section(schema: &Schema) -> (TokenStream, TokenStream
                 unsafe(link_section = "typewire_schemas")
             )]
             #[used]
-            static __GAFFER_SCHEMA: #c::Record<#record_type> =
+            static __TYPEWIRE_SCHEMA: #c::Record<#record_type> =
                 #c::Record::new(#record_value);
         };
     }

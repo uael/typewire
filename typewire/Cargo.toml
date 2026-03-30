@@ -29,8 +29,8 @@ path = "src/bin.rs"
 required-features = ["cli"]
 
 [dependencies]
-typewire-derive = { path = "../typewire-derive", optional = true }
-typewire-schema = { path = "../typewire-schema" }
+typewire-derive = { version = "=0.0.1", path = "../typewire-derive", optional = true }
+typewire-schema = { version = "=0.0.1", path = "../typewire-schema" }
 clap = { version = "4", features = ["derive"], optional = true }
 object = { version = "0.39", features = ["read", "wasm"], optional = true }
 walrus = { version = "0.26", optional = true }
