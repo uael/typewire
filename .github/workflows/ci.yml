@@ -18,6 +18,19 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --all
 
+  test-wasm:
+    name: Test (wasm32)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: cargo-bins/cargo-binstall@main
+      - run: cargo binstall --no-confirm wasm-bindgen-cli
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p typewire --target wasm32-unknown-unknown
+
   lint:
     name: Lint
     runs-on: ubuntu-latest

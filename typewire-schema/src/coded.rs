@@ -432,8 +432,7 @@ pub struct Types0();
 
 macro_rules! define_types {
     ($($name:ident<$($T:ident),+>;)*) => {$(
-        #[derive(Clone, Copy)]
-        #[derive(zerocopy::IntoBytes, zerocopy::Immutable)]
+        #[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
         #[repr(C, packed)]
         pub struct $name<$($T: Copy),+>($(pub $T),+);
     )*};
