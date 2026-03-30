@@ -1,6 +1,6 @@
 [package]
 name = "typewire-schema"
-version = "0.0.1"
+version = "0.0.2"
 edition.workspace = true
 rust-version.workspace = true
 license = "Apache-2.0 OR MIT"
