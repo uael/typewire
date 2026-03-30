@@ -1,0 +1,29 @@
+[workspace]
+git_tag_enable = true
+git_release_enable = true
+
+[[package]]
+name = "typewire"
+changelog_path = "CHANGELOG.md"
+changelog_include = ["typewire-derive", "typewire-schema"]
+git_tag_name = "v{{ version }}"
+git_release_name = "v{{ version }}"
+
+[[package]]
+name = "typewire-derive"
+changelog_update = false
+git_tag_enable = false
+git_release_enable = false
+
+[[package]]
+name = "typewire-schema"
+changelog_update = false
+git_tag_enable = false
+git_release_enable = false
+
+[[package]]
+name = "xtask"
+publish = false
+changelog_update = false
+git_tag_enable = false
+git_release_enable = false

@@ -1,0 +1,22 @@
+[package]
+name = "typewire-derive"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "Apache-2.0 OR MIT"
+description = "Derive macros for the typewire crate"
+repository = "https://github.com/uael/typewire"
+homepage = "https://github.com/uael/typewire"
+documentation = "https://docs.rs/typewire-derive"
+readme = "../README.md"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2", features = ["full"] }
+quote = "1"
+proc-macro2 = "1"
+
+[lints]
+workspace = true
