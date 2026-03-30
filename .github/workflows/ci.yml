@@ -47,10 +47,13 @@ jobs:
         run: |
           cargo run -p typewire --features cli -- target/wasm32-unknown-unknown/release/todo_app.wasm --no-strip -o examples/todo-app/types.gen.d.ts
           diff examples/todo-app/types.d.ts examples/todo-app/types.gen.d.ts
-      - name: JS runtime test
+      - name: Type-check and run
         run: |
-          wasm-bindgen target/wasm32-unknown-unknown/release/todo_app.wasm --out-dir examples/todo-app/pkg --target nodejs --no-typescript
-          node examples/todo-app/test.mjs
+          wasm-bindgen target/wasm32-unknown-unknown/release/todo_app.wasm --out-dir examples/todo-app/pkg --target nodejs
+          cd examples/todo-app
+          npm install --prefer-offline
+          npx tsc --noEmit
+          npx tsx test.ts
 
   lint:
     name: Lint

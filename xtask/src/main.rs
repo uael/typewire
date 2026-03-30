@@ -47,7 +47,7 @@ fn main() -> Result<()> {
   match cli.command {
     Command::Fmt { check } => fmt(&sh, check),
     Command::Lint { fix } => lint(&sh, fix),
-    Command::Test => test(&sh),
+    Command::Test => test(&mut sh),
   }
 }
 
@@ -96,7 +96,7 @@ fn lint(sh: &Shell, fix: bool) -> Result<()> {
   fmt(sh, !fix)
 }
 
-fn test(sh: &Shell) -> Result<()> {
+fn test(sh: &mut Shell) -> Result<()> {
   // Native tests.
   cmd!(sh, "cargo test --all").run_echo()?;
 
@@ -119,11 +119,15 @@ fn test(sh: &Shell) -> Result<()> {
 
   cmd!(
     sh,
-    "wasm-bindgen target/{WASM_TARGET}/release/todo_app.wasm --out-dir examples/todo-app/pkg --target nodejs --no-typescript"
+    "wasm-bindgen target/{WASM_TARGET}/release/todo_app.wasm --out-dir examples/todo-app/pkg --target nodejs"
   )
   .run_echo()?;
 
-  cmd!(sh, "node examples/todo-app/test.mjs").run_echo()?;
+  // Type-check and run the test against the generated types.
+  sh.set_current_dir(ROOT.join("examples/todo-app"));
+  cmd!(sh, "npm install --prefer-offline").run_echo()?;
+  cmd!(sh, "npx tsc --noEmit").run_echo()?;
+  cmd!(sh, "npx tsx test.ts").run_echo()?;
 
   Ok(())
 }

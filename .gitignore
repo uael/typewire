@@ -43,8 +43,10 @@
 !examples/*/
 !examples/*/Cargo.toml
 !examples/*/README.md
-!examples/*/*.mjs
+!examples/*/*.ts
 !examples/*/*.d.ts
+!examples/*/tsconfig.json
+!examples/*/package.json
 !examples/*/src/
 !examples/**/*.rs
 
