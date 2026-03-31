@@ -46,7 +46,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     return Err(
       format!(
         "schema version mismatch: binary has version {binary_version}, \
-         but this CLI expects version {SCHEMA_VERSION}"
+         but this CLI expects version {SCHEMA_VERSION}; \
+         re-compile the binary to update the schemas"
       )
       .into(),
     );
