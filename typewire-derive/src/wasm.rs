@@ -421,77 +421,7 @@ fn struct_from_js_body(s: &SchemaStruct) -> TokenStream {
         quote! {}
       };
 
-      // Call destruct, then bind each field from the array.
-      // Active fields (not both-skip) map 1:1 to array positions.
-      let mut arr_idx: u32 = 0;
-      let field_bindings: Vec<TokenStream> = fields
-        .iter()
-        .map(|f| {
-          let ident = &f.ident;
-
-          // Fully skipped fields (both SKIP_SER and SKIP_DE) are not in the
-          // destruct array — just use their default.
-          if f.flags.contains(FieldFlags::SKIP_SER) && f.flags.contains(FieldFlags::SKIP_DE) {
-            let default_expr = default_expr_for_field(f);
-            return quote! { let #ident = #default_expr; };
-          }
-
-          // SKIP_DE fields are in the destruct array (for patch_js) but
-          // from_js ignores them and uses the default value.
-          if f.flags.contains(FieldFlags::SKIP_DE) {
-            arr_idx += 1; // consume the array slot
-            let default_expr = default_expr_for_field(f);
-            return quote! { let #ident = #default_expr; };
-          }
-
-          // FLATTEN fields get the whole parent object from destruct.
-          if f.flags.contains(FieldFlags::FLATTEN) {
-            let ty = &f.ty;
-            let field_str = ident.to_string();
-            let idx = arr_idx;
-            arr_idx += 1;
-            return quote! {
-              let #ident = <#ty as ::typewire::Typewire>::from_js(__arr.get(#idx))
-                .map_err(|e| e.in_context(#field_str))?;
-            };
-          }
-
-          let idx = arr_idx;
-          arr_idx += 1;
-          let from_js = field_from_js_expr(f);
-          let js_key = &f.wire_name;
-          let ty = &f.ty;
-          let has_default = !matches!(f.default, SchemaFieldDefault::None);
-
-          if has_default {
-            let default_expr = default_expr_for_field(f);
-            quote! {
-              let #ident = {
-                let v = __arr.get(#idx);
-                if !v.is_undefined() && !v.is_null() {
-                  #from_js
-                } else {
-                  #default_expr
-                }
-              };
-            }
-          } else {
-            quote! {
-              let #ident = {
-                let v = __arr.get(#idx);
-                if !v.is_undefined() {
-                  #from_js
-                } else {
-                  match <#ty as ::typewire::Typewire>::or_default() {
-                    Some(d) => d,
-                    None => return Err(::typewire::Error::MissingField { field: #js_key }),
-                  }
-                }
-              };
-            }
-          }
-        })
-        .collect();
+      let field_bindings = named_fields_from_destruct_arr(fields);
 
       let field_names: Vec<_> = fields.iter().map(|f| &f.ident).collect();
 
@@ -541,25 +471,23 @@ fn struct_patch_js_fn(s: &SchemaStruct) -> TokenStream {
       let type_name = s.ident.to_string();
       let destruct_fn = format_ident!("__tw_{type_name}_destruct");
 
+      let active = active_fields(fields);
       let mut arr_idx: u32 = 0;
-      let field_patches: Vec<TokenStream> = fields
+      let field_patches: Vec<TokenStream> = active
         .iter()
-        .filter_map(|f| {
-          if f.flags.contains(FieldFlags::SKIP_SER) && f.flags.contains(FieldFlags::SKIP_DE) {
-            return None;
-          }
+        .map(|f| {
           let ident = &f.ident;
 
           if f.flags.contains(FieldFlags::FLATTEN) {
             let idx = arr_idx;
             arr_idx += 1;
-            return Some(quote! {
+            return quote! {
               ::typewire::Typewire::patch_js(
                 &self.#ident,
                 &__arr.get(#idx),
                 |_| {},
               );
-            });
+            };
           }
 
           let idx = arr_idx;
@@ -570,7 +498,7 @@ fn struct_patch_js_fn(s: &SchemaStruct) -> TokenStream {
             f.flags.intersects(FieldFlags::BASE64 | FieldFlags::DISPLAY | FieldFlags::SERDE_BYTES);
           let setter_fn = format_ident!("__tw_{type_name}_set_{ident}");
 
-          let patch_call = if is_special {
+          if is_special {
             quote! {
               {
                 let __old_v = __arr.get(#idx);
@@ -588,9 +516,7 @@ fn struct_patch_js_fn(s: &SchemaStruct) -> TokenStream {
                 |v| #setter_fn(old, v),
               );
             }
-          };
-
-          Some(patch_call)
+          }
         })
         .collect();
 
@@ -694,6 +620,20 @@ fn enum_patch_js_fn(e: &SchemaEnum) -> TokenStream {
   }
 }
 
+/// Variants that participate in tagged dispatch (not `SKIP_DE`, not `UNTAGGED`, not `OTHER`).
+/// The returned order determines the dispatch index, so all call sites must use
+/// this single function to ensure consistency between JS and Rust codegen.
+fn tagged_variants(e: &SchemaEnum) -> Vec<&SchemaVariant> {
+  e.variants
+    .iter()
+    .filter(|v| {
+      !v.flags.contains(VariantFlags::SKIP_DE)
+        && !v.flags.contains(VariantFlags::UNTAGGED)
+        && !v.flags.contains(VariantFlags::OTHER)
+    })
+    .collect()
+}
+
 // ---------------------------------------------------------------------------
 // Externally tagged: `{ "VariantName": <content> }` or `"VariantName"`
 // ---------------------------------------------------------------------------
@@ -756,15 +696,7 @@ fn ext_tagged_from_js(e: &SchemaEnum) -> TokenStream {
   let type_name = e.ident.to_string();
   let dispatch_fn = format_ident!("__tw_{type_name}_dispatch");
 
-  let tagged_variants: Vec<&SchemaVariant> = e
-    .variants
-    .iter()
-    .filter(|v| {
-      !v.flags.contains(VariantFlags::SKIP_DE)
-        && !v.flags.contains(VariantFlags::UNTAGGED)
-        && !v.flags.contains(VariantFlags::OTHER)
-    })
-    .collect();
+  let tagged_variants = tagged_variants(e);
 
   let dispatch_arms: Vec<TokenStream> = tagged_variants
     .iter()
@@ -917,15 +849,7 @@ fn ext_tagged_patch_js(e: &SchemaEnum) -> TokenStream {
   let type_name = e.ident.to_string();
   let dispatch_fn = format_ident!("__tw_{type_name}_dispatch");
 
-  let tagged: Vec<&SchemaVariant> = e
-    .variants
-    .iter()
-    .filter(|v| {
-      !v.flags.contains(VariantFlags::SKIP_DE)
-        && !v.flags.contains(VariantFlags::UNTAGGED)
-        && !v.flags.contains(VariantFlags::OTHER)
-    })
-    .collect();
+  let tagged = tagged_variants(e);
 
   let arms: Vec<_> = e
     .variants
@@ -957,12 +881,7 @@ fn ext_tagged_patch_js(e: &SchemaEnum) -> TokenStream {
         }),
         VariantKind::Named(fields) => {
           let binds = field_binds(fields);
-          let active: Vec<&SchemaField> = fields
-            .iter()
-            .filter(|f| {
-              !(f.flags.contains(FieldFlags::SKIP_SER) && f.flags.contains(FieldFlags::SKIP_DE))
-            })
-            .collect();
+          let active = active_fields(fields);
           if active.is_empty() {
             return Some(quote! {
               #name::#vname { #(#binds,)* .. } => {
@@ -972,45 +891,8 @@ fn ext_tagged_patch_js(e: &SchemaEnum) -> TokenStream {
           }
           let content_fn = format_ident!("__tw_{type_name}_content_{vname}");
           let destruct_fn = format_ident!("__tw_{type_name}_destruct_{vname}");
-          let mut arr_idx: u32 = 0;
-          let patches: Vec<TokenStream> = active
-            .iter()
-            .map(|f| {
-              let ident = &f.ident;
-              if f.flags.contains(FieldFlags::FLATTEN) {
-                let idx = arr_idx;
-                arr_idx += 1;
-                return quote! {
-                  ::typewire::Typewire::patch_js(#ident, &__varr.get(#idx), |_| {});
-                };
-              }
-              let idx = arr_idx;
-              arr_idx += 1;
-              let ident_ts = quote! { #ident };
-              let to_js = field_to_js_expr(&ident_ts, f);
-              let setter_fn = format_ident!("__tw_{type_name}_set_{vname}_{ident}");
-              let is_special = f
-                .flags
-                .intersects(FieldFlags::BASE64 | FieldFlags::DISPLAY | FieldFlags::SERDE_BYTES);
-              if is_special {
-                quote! {
-                  {
-                    let __old_v = __varr.get(#idx);
-                    let __new_v = #to_js;
-                    if __old_v != __new_v { #setter_fn(&__content, __new_v); }
-                  }
-                }
-              } else {
-                quote! {
-                  ::typewire::Typewire::patch_js(
-                    #ident_ts,
-                    &__varr.get(#idx),
-                    |v| #setter_fn(&__content, v),
-                  );
-                }
-              }
-            })
-            .collect();
+          let patches =
+            variant_patch_fields(&active, &type_name, Some(vname), &quote! { &__content });
 
           Some(quote! {
             #name::#vname { #(#binds,)* .. } => {
@@ -1033,6 +915,10 @@ fn ext_tagged_patch_js(e: &SchemaEnum) -> TokenStream {
                 _set(self.to_js());
               } else {
                 let __content = #content_fn(old);
+                // Full wrapper replacement: for external tagging (`{"Tag": content}`),
+                // the wrapper has exactly one key, so replacing the whole object via
+                // `_set(self.to_js())` is correct and avoids needing a content-key
+                // setter helper for this single callback path.
                 <#ty as ::typewire::Typewire>::patch_js(__inner, &__content, |v| {
                   _set(self.to_js());
                 });
@@ -1129,76 +1015,87 @@ fn int_tagged_to_js(e: &SchemaEnum, tag: &str) -> TokenStream {
   }
 }
 
+/// Shared `from_js` body for all-unit enums with internal or adjacent tagging.
+/// Reads the tag field via `Reflect::get` and matches against variant wire names.
+/// This is the most efficient approach for all-unit enums since no JS boundary
+/// crossing is needed beyond the single `Reflect::get`, and the string match
+/// avoids allocating an intermediate index.
+fn all_unit_tag_from_js(
+  name: &Ident,
+  tag: &str,
+  tagged_variants: &[&SchemaVariant],
+  untagged_fallbacks: &[TokenStream],
+  other_fallback: &TokenStream,
+  has_fallbacks: bool,
+) -> TokenStream {
+  let string_arms: Vec<TokenStream> = tagged_variants
+    .iter()
+    .map(|v| {
+      let all_names = &v.all_wire_names;
+      let vname = &v.ident;
+      if has_fallbacks {
+        quote! { #(#all_names)|* => return Ok(#name::#vname), }
+      } else {
+        quote! { #(#all_names)|* => Ok(#name::#vname), }
+      }
+    })
+    .collect();
+
+  if has_fallbacks {
+    let final_err = if other_fallback.is_empty() {
+      quote! { Err(::typewire::Error::NoMatchingVariant) }
+    } else {
+      other_fallback.clone()
+    };
+    return quote! {
+      // Reflect::get: all-unit enum tag read.
+      let __tag_val = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#tag))
+        .ok()
+        .and_then(|v| v.as_string());
+      if let Some(ref tag_val) = __tag_val {
+        match tag_val.as_str() {
+          #(#string_arms)*
+          _ => {}
+        }
+      }
+      #(#untagged_fallbacks)*
+      #final_err
+    };
+  }
+  quote! {
+    // Reflect::get: all-unit enum tag read.
+    let tag_val = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#tag))
+      .ok()
+      .and_then(|v| v.as_string())
+      .ok_or(::typewire::Error::MissingField { field: #tag })?;
+    match tag_val.as_str() {
+      #(#string_arms)*
+      other => Err(::typewire::Error::UnknownVariant { variant: other.into() }),
+    }
+  }
+}
+
 fn int_tagged_from_js(e: &SchemaEnum, tag: &str) -> TokenStream {
   let name = &e.ident;
   let type_name = e.ident.to_string();
   let all_unit = e.flags.contains(EnumFlags::ALL_UNIT);
 
-  let tagged_variants: Vec<&SchemaVariant> = e
-    .variants
-    .iter()
-    .filter(|v| {
-      !v.flags.contains(VariantFlags::SKIP_DE)
-        && !v.flags.contains(VariantFlags::UNTAGGED)
-        && !v.flags.contains(VariantFlags::OTHER)
-    })
-    .collect();
+  let tagged_variants = tagged_variants(e);
 
   let untagged_fallbacks = untagged_variant_fallbacks(name, &e.variants);
   let other_fallback = other_variant_fallback(name, &e.variants);
   let has_fallbacks = !untagged_fallbacks.is_empty() || !other_fallback.is_empty();
 
-  // All-unit enums have no JS dispatch helper — use direct tag string
-  // matching. Reflect::get reads the tag field; this is the most efficient
-  // approach for all-unit enums since no JS boundary crossing is needed
-  // beyond the single Reflect::get, and the string match avoids allocating
-  // an intermediate index.
+  // All-unit enums have no JS dispatch helper — use direct tag string matching.
   if all_unit {
-    let string_arms: Vec<TokenStream> = tagged_variants
-      .iter()
-      .map(|v| {
-        let all_names = &v.all_wire_names;
-        let vname = &v.ident;
-        if has_fallbacks {
-          quote! { #(#all_names)|* => return Ok(#name::#vname), }
-        } else {
-          quote! { #(#all_names)|* => Ok(#name::#vname), }
-        }
-      })
-      .collect();
-
-    if has_fallbacks {
-      let final_err = if other_fallback.is_empty() {
-        quote! { Err(::typewire::Error::NoMatchingVariant) }
-      } else {
-        other_fallback
-      };
-      return quote! {
-        // Reflect::get: all-unit enum tag read (see comment above).
-        let __tag_val = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#tag))
-          .ok()
-          .and_then(|v| v.as_string());
-        if let Some(ref tag_val) = __tag_val {
-          match tag_val.as_str() {
-            #(#string_arms)*
-            _ => {}
-          }
-        }
-        #(#untagged_fallbacks)*
-        #final_err
-      };
-    }
-    return quote! {
-      // Reflect::get: all-unit enum tag read (see comment above).
-      let tag_val = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#tag))
-        .ok()
-        .and_then(|v| v.as_string())
-        .ok_or(::typewire::Error::MissingField { field: #tag })?;
-      match tag_val.as_str() {
-        #(#string_arms)*
-        other => Err(::typewire::Error::UnknownVariant { variant: other.into() }),
-      }
-    };
+    return all_unit_tag_from_js(
+      name,
+      tag,
+      &tagged_variants,
+      &untagged_fallbacks,
+      &other_fallback,
+      has_fallbacks,
+    );
   }
 
   let dispatch_fn = format_ident!("__tw_{type_name}_dispatch");
@@ -1297,15 +1194,7 @@ fn int_tagged_patch_js(e: &SchemaEnum) -> TokenStream {
 
   // Build a mapping from variant index → patch arm.
   // The dispatch indices must match the same filtered order as js_enum_dispatch.
-  let tagged: Vec<&SchemaVariant> = e
-    .variants
-    .iter()
-    .filter(|v| {
-      !v.flags.contains(VariantFlags::SKIP_DE)
-        && !v.flags.contains(VariantFlags::UNTAGGED)
-        && !v.flags.contains(VariantFlags::OTHER)
-    })
-    .collect();
+  let tagged = tagged_variants(e);
 
   let arms: Vec<_> = e
     .variants
@@ -1340,51 +1229,8 @@ fn int_tagged_patch_js(e: &SchemaEnum) -> TokenStream {
         VariantKind::Named(fields) => {
           let binds = field_binds(fields);
           let destruct_fn = format_ident!("__tw_{type_name}_destruct_{vname}");
-          let active: Vec<&SchemaField> = fields
-            .iter()
-            .filter(|f| {
-              !(f.flags.contains(FieldFlags::SKIP_SER) && f.flags.contains(FieldFlags::SKIP_DE))
-            })
-            .collect();
-          let mut arr_idx: u32 = 0;
-          let patches: Vec<TokenStream> = active
-            .iter()
-            .map(|f| {
-              let ident = &f.ident;
-              if f.flags.contains(FieldFlags::FLATTEN) {
-                let idx = arr_idx;
-                arr_idx += 1;
-                return quote! {
-                  ::typewire::Typewire::patch_js(#ident, &__varr.get(#idx), |_| {});
-                };
-              }
-              let idx = arr_idx;
-              arr_idx += 1;
-              let ident_ts = quote! { #ident };
-              let to_js = field_to_js_expr(&ident_ts, f);
-              let setter_fn = format_ident!("__tw_{type_name}_set_{vname}_{ident}");
-              let is_special = f
-                .flags
-                .intersects(FieldFlags::BASE64 | FieldFlags::DISPLAY | FieldFlags::SERDE_BYTES);
-              if is_special {
-                quote! {
-                  {
-                    let __old_v = __varr.get(#idx);
-                    let __new_v = #to_js;
-                    if __old_v != __new_v { #setter_fn(old, __new_v); }
-                  }
-                }
-              } else {
-                quote! {
-                  ::typewire::Typewire::patch_js(
-                    #ident_ts,
-                    &__varr.get(#idx),
-                    |v| #setter_fn(old, v),
-                  );
-                }
-              }
-            })
-            .collect();
+          let active = active_fields(fields);
+          let patches = variant_patch_fields(&active, &type_name, Some(vname), &quote! { old });
 
           Some(quote! {
             #name::#vname { #(#binds,)* .. } => {
@@ -1492,69 +1338,22 @@ fn adj_tagged_from_js(e: &SchemaEnum, tag: &str) -> TokenStream {
   let type_name = e.ident.to_string();
   let all_unit = e.flags.contains(EnumFlags::ALL_UNIT);
 
-  let tagged_variants: Vec<&SchemaVariant> = e
-    .variants
-    .iter()
-    .filter(|v| {
-      !v.flags.contains(VariantFlags::SKIP_DE)
-        && !v.flags.contains(VariantFlags::UNTAGGED)
-        && !v.flags.contains(VariantFlags::OTHER)
-    })
-    .collect();
+  let tagged_variants = tagged_variants(e);
 
   let untagged_fallbacks = untagged_variant_fallbacks(name, &e.variants);
   let other_fallback = other_variant_fallback(name, &e.variants);
   let has_fallbacks = !untagged_fallbacks.is_empty() || !other_fallback.is_empty();
 
-  // All-unit enums have no JS dispatch helper — use direct tag string
-  // matching. Reflect::get reads the tag field (same rationale as
-  // `int_tagged_from_js`).
+  // All-unit enums have no JS dispatch helper — use direct tag string matching.
   if all_unit {
-    let string_arms: Vec<TokenStream> = tagged_variants
-      .iter()
-      .map(|v| {
-        let all_names = &v.all_wire_names;
-        let vname = &v.ident;
-        if has_fallbacks {
-          quote! { #(#all_names)|* => return Ok(#name::#vname), }
-        } else {
-          quote! { #(#all_names)|* => Ok(#name::#vname), }
-        }
-      })
-      .collect();
-
-    if has_fallbacks {
-      let final_err = if other_fallback.is_empty() {
-        quote! { Err(::typewire::Error::NoMatchingVariant) }
-      } else {
-        other_fallback
-      };
-      return quote! {
-        // Reflect::get: all-unit enum tag read (see comment above).
-        let __tag_val = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#tag))
-          .ok()
-          .and_then(|v| v.as_string());
-        if let Some(ref tag_val) = __tag_val {
-          match tag_val.as_str() {
-            #(#string_arms)*
-            _ => {}
-          }
-        }
-        #(#untagged_fallbacks)*
-        #final_err
-      };
-    }
-    return quote! {
-      // Reflect::get: all-unit enum tag read (see comment above).
-      let tag_val = ::js_sys::Reflect::get(&value, &::wasm_bindgen::JsValue::from_str(#tag))
-        .ok()
-        .and_then(|v| v.as_string())
-        .ok_or(::typewire::Error::MissingField { field: #tag })?;
-      match tag_val.as_str() {
-        #(#string_arms)*
-        other => Err(::typewire::Error::UnknownVariant { variant: other.into() }),
-      }
-    };
+    return all_unit_tag_from_js(
+      name,
+      tag,
+      &tagged_variants,
+      &untagged_fallbacks,
+      &other_fallback,
+      has_fallbacks,
+    );
   }
 
   let dispatch_fn = format_ident!("__tw_{type_name}_dispatch");
@@ -1674,15 +1473,7 @@ fn adj_tagged_patch_js(e: &SchemaEnum, content_key: &str) -> TokenStream {
   let dispatch_fn = format_ident!("__tw_{type_name}_dispatch");
   let content_fn = format_ident!("__tw_{type_name}_content");
 
-  let tagged: Vec<&SchemaVariant> = e
-    .variants
-    .iter()
-    .filter(|v| {
-      !v.flags.contains(VariantFlags::SKIP_DE)
-        && !v.flags.contains(VariantFlags::UNTAGGED)
-        && !v.flags.contains(VariantFlags::OTHER)
-    })
-    .collect();
+  let tagged = tagged_variants(e);
 
   let arms: Vec<_> = e
     .variants
@@ -1715,51 +1506,9 @@ fn adj_tagged_patch_js(e: &SchemaEnum, content_key: &str) -> TokenStream {
         VariantKind::Named(fields) => {
           let binds = field_binds(fields);
           let destruct_fn = format_ident!("__tw_{type_name}_destruct_{vname}");
-          let active: Vec<&SchemaField> = fields
-            .iter()
-            .filter(|f| {
-              !(f.flags.contains(FieldFlags::SKIP_SER) && f.flags.contains(FieldFlags::SKIP_DE))
-            })
-            .collect();
-          let mut arr_idx: u32 = 0;
-          let patches: Vec<TokenStream> = active
-            .iter()
-            .map(|f| {
-              let ident = &f.ident;
-              if f.flags.contains(FieldFlags::FLATTEN) {
-                let idx = arr_idx;
-                arr_idx += 1;
-                return quote! {
-                  ::typewire::Typewire::patch_js(#ident, &__varr.get(#idx), |_| {});
-                };
-              }
-              let idx = arr_idx;
-              arr_idx += 1;
-              let ident_ts = quote! { #ident };
-              let to_js = field_to_js_expr(&ident_ts, f);
-              let setter_fn = format_ident!("__tw_{type_name}_set_{vname}_{ident}");
-              let is_special = f
-                .flags
-                .intersects(FieldFlags::BASE64 | FieldFlags::DISPLAY | FieldFlags::SERDE_BYTES);
-              if is_special {
-                quote! {
-                  {
-                    let __old_v = __varr.get(#idx);
-                    let __new_v = #to_js;
-                    if __old_v != __new_v { #setter_fn(&__content, __new_v); }
-                  }
-                }
-              } else {
-                quote! {
-                  ::typewire::Typewire::patch_js(
-                    #ident_ts,
-                    &__varr.get(#idx),
-                    |v| #setter_fn(&__content, v),
-                  );
-                }
-              }
-            })
-            .collect();
+          let active = active_fields(fields);
+          let patches =
+            variant_patch_fields(&active, &type_name, Some(vname), &quote! { &__content });
 
           Some(quote! {
             #name::#vname { #(#binds,)* .. } => {
@@ -2040,9 +1789,71 @@ fn field_from_js_expr(f: &SchemaField) -> TokenStream {
   }
 }
 
+/// Fields that participate in at least one of `to_js`/`from_js`/`patch_js`
+/// (i.e. not both `SKIP_SER` and `SKIP_DE`).  Used by both Rust codegen and
+/// JS binding generation to ensure consistent array indexing.
+fn active_fields(fields: &[SchemaField]) -> Vec<&SchemaField> {
+  fields
+    .iter()
+    .filter(|f| !(f.flags.contains(FieldFlags::SKIP_SER) && f.flags.contains(FieldFlags::SKIP_DE)))
+    .collect()
+}
+
+/// Generate `patch_js` calls for active named fields of an enum variant.
+/// Fields are read from `__varr` (the destruct array); setter fns write to
+/// `setter_target`. Variant name is included in setter fn names when `vname`
+/// is `Some` (enum variants) vs `None` (top-level structs).
+fn variant_patch_fields(
+  active: &[&SchemaField],
+  type_name: &str,
+  vname: Option<&Ident>,
+  setter_target: &TokenStream,
+) -> Vec<TokenStream> {
+  let mut arr_idx: u32 = 0;
+  active
+    .iter()
+    .map(|f| {
+      let ident = &f.ident;
+      if f.flags.contains(FieldFlags::FLATTEN) {
+        let idx = arr_idx;
+        arr_idx += 1;
+        return quote! {
+          ::typewire::Typewire::patch_js(#ident, &__varr.get(#idx), |_| {});
+        };
+      }
+      let idx = arr_idx;
+      arr_idx += 1;
+      let ident_ts = quote! { #ident };
+      let to_js = field_to_js_expr(&ident_ts, f);
+      let setter_fn = vname.map_or_else(
+        || format_ident!("__tw_{type_name}_set_{ident}"),
+        |v| format_ident!("__tw_{type_name}_set_{v}_{ident}"),
+      );
+      let is_special =
+        f.flags.intersects(FieldFlags::BASE64 | FieldFlags::DISPLAY | FieldFlags::SERDE_BYTES);
+      if is_special {
+        quote! {
+          {
+            let __old_v = __varr.get(#idx);
+            let __new_v = #to_js;
+            if __old_v != __new_v { #setter_fn(#setter_target, __new_v); }
+          }
+        }
+      } else {
+        quote! {
+          ::typewire::Typewire::patch_js(
+            #ident_ts,
+            &__varr.get(#idx),
+            |v| #setter_fn(#setter_target, v),
+          );
+        }
+      }
+    })
+    .collect()
+}
+
 /// Generate `let field = ...;` bindings from a destruct array (`__arr`).
-/// Uses the same pattern as `struct_from_js_body`'s Named case: array indices
-/// map 1:1 to active fields (not both-skip), with `SKIP_DE`/`FLATTEN`/default handling.
+/// Array indices map 1:1 to `active_fields`, with `SKIP_DE`/`FLATTEN`/default handling.
 fn named_fields_from_destruct_arr(fields: &[SchemaField]) -> Vec<TokenStream> {
   let mut arr_idx: u32 = 0;
   fields
@@ -2382,11 +2193,7 @@ fn struct_js_bindings(s: &SchemaStruct) -> TokenStream {
 
   let type_name = s.ident.to_string();
 
-  // Active fields: participate in at least one of to_js/from_js/patch_js.
-  let active: Vec<&SchemaField> = fields
-    .iter()
-    .filter(|f| !(f.flags.contains(FieldFlags::SKIP_SER) && f.flags.contains(FieldFlags::SKIP_DE)))
-    .collect();
+  let active = active_fields(fields);
 
   if active.is_empty() {
     return TokenStream::new();
@@ -2445,16 +2252,7 @@ fn enum_js_bindings(e: &SchemaEnum) -> TokenStream {
       e.variants.iter().filter(|v| !v.flags.contains(VariantFlags::SKIP_DE)).collect();
     js_enum_variant_destructs(&mut js, &mut extern_fns, &type_name, &de_variants);
   } else {
-    // Variants that participate in tagged dispatch (not skip_de, not untagged, not other).
-    let tagged_variants: Vec<&SchemaVariant> = e
-      .variants
-      .iter()
-      .filter(|v| {
-        !v.flags.contains(VariantFlags::SKIP_DE)
-          && !v.flags.contains(VariantFlags::UNTAGGED)
-          && !v.flags.contains(VariantFlags::OTHER)
-      })
-      .collect();
+    let tagged_variants = tagged_variants(e);
 
     // -- dispatch: returns i32 index --
     js_enum_dispatch(&mut js, &mut extern_fns, &type_name, &tagged_variants, &e.tagging);
@@ -2758,13 +2556,7 @@ fn js_enum_variant_destructs(
     };
     let vname = &v.ident;
 
-    // Active fields for this variant
-    let active: Vec<&SchemaField> = fields
-      .iter()
-      .filter(|f| {
-        !(f.flags.contains(FieldFlags::SKIP_SER) && f.flags.contains(FieldFlags::SKIP_DE))
-      })
-      .collect();
+    let active = active_fields(fields);
 
     if active.is_empty() {
       continue;
