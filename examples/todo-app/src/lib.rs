@@ -8,19 +8,19 @@ use wasm_bindgen::prelude::*;
 // ---------------------------------------------------------------------------
 
 #[derive(Clone, Typewire)]
-#[serde(rename_all = "camelCase")]
+#[typewire(rename_all = "camelCase")]
 pub struct Todo {
   pub id: u32,
   pub title: String,
   pub completed: bool,
-  #[serde(skip_serializing_if = "Option::is_none")]
+  #[typewire(skip_serializing_if = "Option::is_none")]
   pub description: Option<String>,
   pub priority: Priority,
   pub tags: Vec<String>,
 }
 
 #[derive(Clone, PartialEq, Eq, Typewire)]
-#[serde(rename_all = "lowercase")]
+#[typewire(rename_all = "lowercase")]
 pub enum Priority {
   Low,
   Medium,
@@ -28,7 +28,7 @@ pub enum Priority {
 }
 
 #[derive(Clone, Typewire)]
-#[serde(tag = "type", content = "data")]
+#[typewire(tag = "type", content = "data")]
 pub enum Command {
   Add(Todo),
   Toggle { id: u32 },
@@ -37,11 +37,11 @@ pub enum Command {
 }
 
 #[derive(Clone, Typewire)]
-#[serde(transparent)]
+#[typewire(transparent)]
 pub struct TodoId(u32);
 
 #[derive(Clone, Typewire)]
-#[serde(rename_all = "camelCase")]
+#[typewire(rename_all = "camelCase")]
 pub struct TodoList {
   pub name: String,
   pub todos: Vec<Todo>,
