@@ -195,6 +195,141 @@ impl Codegen for WasmCodegen {
       patch_js,
     ]
   }
+
+  fn abi_impls(ident: &syn::Ident, generics: &syn::Generics) -> TokenStream {
+    let cfg = Self::cfg_predicate();
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    quote! {
+      #[cfg(#cfg)]
+      impl #impl_generics ::wasm_bindgen::describe::WasmDescribe
+        for #ident #ty_generics #where_clause
+      {
+        fn describe() {
+          <::wasm_bindgen::JsValue as ::wasm_bindgen::describe::WasmDescribe>::describe()
+        }
+      }
+
+      #[cfg(#cfg)]
+      impl #impl_generics ::wasm_bindgen::convert::IntoWasmAbi
+        for #ident #ty_generics #where_clause
+      {
+        type Abi = <::wasm_bindgen::JsValue as ::wasm_bindgen::convert::IntoWasmAbi>::Abi;
+
+        #[inline]
+        fn into_abi(self) -> Self::Abi {
+          ::wasm_bindgen::convert::IntoWasmAbi::into_abi(
+            ::typewire::Typewire::to_js(&self),
+          )
+        }
+      }
+
+      #[cfg(#cfg)]
+      impl #impl_generics ::wasm_bindgen::convert::FromWasmAbi
+        for #ident #ty_generics #where_clause
+      {
+        type Abi = <::wasm_bindgen::JsValue as ::wasm_bindgen::convert::FromWasmAbi>::Abi;
+
+        #[inline]
+        unsafe fn from_abi(js: Self::Abi) -> Self {
+          use ::wasm_bindgen::UnwrapThrowExt as _;
+          let value = unsafe {
+            <::wasm_bindgen::JsValue as ::wasm_bindgen::convert::FromWasmAbi>::from_abi(js)
+          };
+          ::typewire::Typewire::from_js(value).unwrap_throw()
+        }
+      }
+
+      #[cfg(#cfg)]
+      impl #impl_generics ::wasm_bindgen::convert::RefFromWasmAbi
+        for #ident #ty_generics #where_clause
+      {
+        type Abi = <::wasm_bindgen::JsValue as ::wasm_bindgen::convert::RefFromWasmAbi>::Abi;
+        type Anchor = ::std::boxed::Box<Self>;
+
+        #[inline]
+        unsafe fn ref_from_abi(js: Self::Abi) -> Self::Anchor {
+          use ::wasm_bindgen::UnwrapThrowExt as _;
+          let value = unsafe {
+            <::wasm_bindgen::JsValue as ::wasm_bindgen::convert::FromWasmAbi>::from_abi(js)
+          };
+          ::std::boxed::Box::new(::typewire::Typewire::from_js(value).unwrap_throw())
+        }
+      }
+
+      #[cfg(#cfg)]
+      impl #impl_generics ::wasm_bindgen::convert::LongRefFromWasmAbi
+        for #ident #ty_generics #where_clause
+      {
+        type Abi = <::wasm_bindgen::JsValue as ::wasm_bindgen::convert::LongRefFromWasmAbi>::Abi;
+        type Anchor = Self;
+
+        #[inline]
+        unsafe fn long_ref_from_abi(js: Self::Abi) -> Self::Anchor {
+          use ::wasm_bindgen::UnwrapThrowExt as _;
+          let value = unsafe {
+            <::wasm_bindgen::JsValue as ::wasm_bindgen::convert::FromWasmAbi>::from_abi(js)
+          };
+          ::typewire::Typewire::from_js(value).unwrap_throw()
+        }
+      }
+
+      #[cfg(#cfg)]
+      impl #impl_generics ::wasm_bindgen::convert::RefMutFromWasmAbi
+        for #ident #ty_generics #where_clause
+      {
+        type Abi = <::wasm_bindgen::JsValue as ::wasm_bindgen::convert::RefFromWasmAbi>::Abi;
+        type Anchor = ::std::boxed::Box<Self>;
+
+        #[inline]
+        unsafe fn ref_mut_from_abi(js: Self::Abi) -> Self::Anchor {
+          use ::wasm_bindgen::UnwrapThrowExt as _;
+          let value = unsafe {
+            <::wasm_bindgen::JsValue as ::wasm_bindgen::convert::FromWasmAbi>::from_abi(js)
+          };
+          ::std::boxed::Box::new(::typewire::Typewire::from_js(value).unwrap_throw())
+        }
+      }
+
+      #[cfg(#cfg)]
+      impl #impl_generics ::wasm_bindgen::convert::OptionIntoWasmAbi
+        for #ident #ty_generics #where_clause
+      {
+        #[inline]
+        fn none() -> Self::Abi {
+          <::wasm_bindgen::JsValue as ::wasm_bindgen::convert::OptionIntoWasmAbi>::none()
+        }
+      }
+
+      #[cfg(#cfg)]
+      impl #impl_generics ::wasm_bindgen::convert::OptionFromWasmAbi
+        for #ident #ty_generics #where_clause
+      {
+        #[inline]
+        fn is_none(abi: &Self::Abi) -> bool {
+          <::wasm_bindgen::JsValue as ::wasm_bindgen::convert::OptionFromWasmAbi>::is_none(abi)
+        }
+      }
+
+      #[cfg(#cfg)]
+      impl #impl_generics ::wasm_bindgen::convert::TryFromJsValue
+        for #ident #ty_generics #where_clause
+      {
+        fn try_from_js_value(
+          value: ::wasm_bindgen::JsValue,
+        ) -> ::core::result::Result<Self, ::wasm_bindgen::JsValue> {
+          ::typewire::Typewire::from_js(value)
+            .map_err(|e| ::wasm_bindgen::JsValue::from_str(
+              &::std::string::ToString::to_string(&e),
+            ))
+        }
+
+        fn try_from_js_value_ref(value: &::wasm_bindgen::JsValue) -> ::core::option::Option<Self> {
+          ::typewire::Typewire::from_js(value.clone()).ok()
+        }
+      }
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
