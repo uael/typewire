@@ -2,29 +2,30 @@
 
 Main library crate. Provides the `Typewire` trait and all built-in implementations.
 
+typewire is a derive-based **cross-language type bridging** framework. WASM/TypeScript is the first supported target; Kotlin and Swift are planned.
+
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `src/lib.rs` | `Typewire` trait, primitive/compound type impls, `patch_js` helpers, wasm utilities |
+| `src/lib.rs` | `Typewire` trait, primitive/compound type impls, platform-specific helpers |
 | `src/error.rs` | `Error` enum with context wrapping |
-| `src/bin.rs` | CLI binary (feature `cli`): extract schemas from binaries, generate TypeScript |
+| `src/bin.rs` | CLI binary (feature `cli`): extract schemas from binaries, generate declarations |
 
 ## Typewire Trait
 
 ```rust
 pub trait Typewire: Sized {
-  type Ident: Copy + 'static;
+  type Ident: Copy + 'static;             // compile-time schema identity
   const IDENT: Self::Ident;
   fn or_default() -> Option<Self>;        // implicit default for absent fields
-  fn to_js(&self) -> JsValue;             // wasm32 only
-  fn from_js(value: JsValue) -> Result<Self, Error>;
-  fn from_js_lenient(value: JsValue, field: &str) -> Result<Self, Error>;
-  fn patch_js(&self, old: &JsValue, set: impl FnOnce(JsValue));
+
+  // Platform-specific methods (e.g. wasm32: to_js/from_js/patch_js)
+  // are cfg-gated and generated per-platform by the derive macro.
 }
 ```
 
-All `to_js`/`from_js`/`patch_js` methods are `#[cfg(target_arch = "wasm32")]`. On non-wasm targets, only `Ident`/`IDENT` and `or_default` exist.
+On non-wasm targets, only `Ident`/`IDENT` and `or_default` exist. On wasm32, `to_js`/`from_js`/`from_js_lenient`/`patch_js` methods are added. Future platforms will add their own cfg-gated methods.
 
 ## Features
 
@@ -35,7 +36,9 @@ All `to_js`/`from_js`/`patch_js` methods are `#[cfg(target_arch = "wasm32")]`. O
 | `uuid`, `chrono`, `url`, `bytes`, `indexmap`, `fractional_index`, `base64`, `serde_json` | `Typewire` impls for these types |
 | `cli` | Binary target + `typewire-schema/typescript` for codegen |
 
-## wasm32 Helpers
+## Platform Helpers
+
+### wasm32
 
 The `wasm` module (cfg-gated) provides:
 - `is_nullish`, `as_safe_f64` — JS value inspection

@@ -22,5 +22,9 @@ proc-macro2 = "1"
 quote = "1"
 syn = { version = "2", features = ["full", "parsing", "proc-macro"] }
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

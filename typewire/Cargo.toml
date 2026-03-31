@@ -10,6 +10,8 @@ homepage = "https://github.com/uael/typewire"
 documentation = "https://docs.rs/typewire"
 readme = "../README.md"
 
+# Keep the type_features list in xtask and the CI doc step
+# (.github/workflows/ci.yml) in sync with these features.
 [features]
 default = ["derive"]
 derive = ["dep:typewire-derive"]
@@ -66,7 +68,9 @@ wasm-bindgen-test = "0.3.64"
 js-sys = "0.3.90"
 
 [package.metadata.docs.rs]
-all-features = true
+# cli conflicts with derive (both pull typewire-schema with mutually exclusive
+# encode/decode features), so list features explicitly.
+features = ["derive", "schemas", "uuid", "fractional_index", "chrono", "url", "indexmap", "bytes", "base64", "serde_json"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]

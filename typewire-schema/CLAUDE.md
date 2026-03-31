@@ -1,6 +1,6 @@
 # typewire-schema
 
-Schema metadata crate. Defines the type metadata pipeline: encode → binary → decode → codegen.
+Schema metadata crate. Defines the language-agnostic type metadata pipeline: encode → binary → decode → codegen. Language emitters (TypeScript, with Kotlin/Swift planned) consume the decoded schemas.
 
 ## Key Files
 
@@ -11,7 +11,7 @@ Schema metadata crate. Defines the type metadata pipeline: encode → binary →
 | `src/coded.rs` | Binary format: `#[repr(C, packed)]` types for link-section embedding |
 | `src/encode.rs` | (feature `encode`) `Schema` → `TokenStream` for link-section records (`generate_schema_and_section(schema, emit_section)`) |
 | `src/decode.rs` | (feature `decode`) Link-section bytes → `Vec<Schema>` with owned data |
-| `src/typescript.rs` | (feature `typescript`) `impl IntoIterator<Item = &Schema>` → `.d.ts` string |
+| `src/typescript.rs` | (feature `typescript`) First language emitter: `Schema` → `.d.ts` string |
 
 ## Three-Stage Pipeline
 

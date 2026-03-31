@@ -25,7 +25,9 @@ thiserror = { version = "2", optional = true }
 zerocopy = { version = "0.8", features = ["derive"] }
 
 [package.metadata.docs.rs]
-all-features = true
+# encode and decode are mutually exclusive — use typescript (implies decode)
+# to document the user-facing API.
+features = ["typescript"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]

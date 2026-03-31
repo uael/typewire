@@ -9,15 +9,12 @@
 //! items and the `#[link_section = "typewire_schemas"]` static for each
 //! `#[derive(Typewire)]` type.
 //!
-//! # Adding a new platform
+//! # Platform independence
 //!
-//! The coded codegen is **platform-independent** — it embeds schema metadata
-//! in the compiled binary regardless of target. To add a new platform (e.g.
-//! iOS/Swift or Android/Kotlin), implement the [`Codegen`] trait in
-//! `typewire-derive` and register it in the derive macro's entry point.
-//! The schema embedding handled here requires no changes.
-//!
-//! [`Codegen`]: https://docs.rs/typewire-derive (trait in typewire-derive::expand)
+//! The schema embedding is **platform-independent** — it records type metadata
+//! in the compiled binary regardless of target. Adding a new target language
+//! only requires a new emitter (like the existing `typescript` module); the
+//! schema encoding handled here requires no changes.
 
 use proc_macro2::TokenStream;
 use quote::quote;
