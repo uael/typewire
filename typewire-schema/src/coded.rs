@@ -31,6 +31,12 @@
 
 use crate::{EnumFlags, FieldFlags, Scalar, StructFlags, VariantFlags};
 
+/// Marker trait for types that can serve as a `Typewire::Ident`.
+///
+/// Seals the `Typewire::Ident` associated type so only the ident types
+/// defined in this module satisfy the bound.
+pub trait SchemaId: Copy + 'static {}
+
 /// The link-section name used to embed schema records in compiled binaries.
 ///
 /// On Apple platforms, the full section specifier is `__DATA,typewire_schemas`.
@@ -98,6 +104,8 @@ pub struct Ident<const N: usize> {
   pub data: [u8; N],
 }
 
+impl<const N: usize> SchemaId for Ident<N> {}
+
 impl<const N: usize> Ident<N> {
   /// # Panics
   ///
@@ -124,6 +132,8 @@ pub struct OptionIdent<Inner: Copy> {
   pub inner: Inner,
 }
 
+impl<Inner: SchemaId> SchemaId for OptionIdent<Inner> {}
+
 impl<Inner: Copy> OptionIdent<Inner> {
   pub const fn new(inner: Inner) -> Self {
     Self { tag: Tag::Option, inner }
@@ -138,6 +148,8 @@ pub struct SeqIdent<Inner: Copy> {
   pub tag: Tag,
   pub element: Inner,
 }
+
+impl<Inner: SchemaId> SchemaId for SeqIdent<Inner> {}
 
 impl<Inner: Copy> SeqIdent<Inner> {
   pub const fn new(element: Inner) -> Self {
@@ -155,6 +167,8 @@ pub struct MapIdent<K: Copy, V: Copy> {
   pub value: V,
 }
 
+impl<K: SchemaId, V: SchemaId> SchemaId for MapIdent<K, V> {}
+
 impl<K: Copy, V: Copy> MapIdent<K, V> {
   pub const fn new(key: K, value: V) -> Self {
     Self { tag: Tag::Map, key, value }
@@ -171,6 +185,8 @@ pub struct TupleIdent<Elements: Copy> {
   pub elements: Elements,
 }
 
+impl<Elements: Copy + 'static> SchemaId for TupleIdent<Elements> {}
+
 impl<Elements: Copy> TupleIdent<Elements> {
   pub const fn new(count: u8, elements: Elements) -> Self {
     Self { tag: Tag::Struct, count, elements }
@@ -185,6 +201,8 @@ pub struct PrimitiveIdent {
   pub tag: Tag,
   pub scalar: Scalar,
 }
+
+impl SchemaId for PrimitiveIdent {}
 
 impl PrimitiveIdent {
   #[must_use]
