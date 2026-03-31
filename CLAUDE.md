@@ -93,6 +93,10 @@ Use [Conventional Commits](https://www.conventionalcommits.org/) — release-plz
 - No `#[allow]` — use `#[expect(lint, reason = "...")]` when suppression is necessary
 - Dual-licensed: Apache-2.0 OR MIT
 
+## Workflow
+
+- When working on a PR, **always keep the PR description synced** with the current state of the changes. Update the title and body whenever the scope or content of the PR evolves.
+
 ## Maintenance
 
 When making changes that affect a crate's public API, features, file structure, or conventions, **always update the corresponding `CLAUDE.md`** files (root and per-crate) to keep them accurate.
