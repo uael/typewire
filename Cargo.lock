@@ -1035,7 +1035,7 @@ dependencies = [
 
 [[package]]
 name = "typewire-derive"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "proc-macro2",
  "quote",

@@ -31,7 +31,7 @@ required-features = ["cli"]
 
 
 [dependencies]
-typewire-derive = { version = "0.0.2", path = "../typewire-derive", optional = true }
+typewire-derive = { version = "0.0.3", path = "../typewire-derive", optional = true }
 typewire-schema = { version = "0.0.2", path = "../typewire-schema" }
 clap = { version = "4", features = ["derive"], optional = true }
 object = { version = "0.39", features = ["read", "wasm"], optional = true }
