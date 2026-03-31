@@ -87,15 +87,19 @@ fn main() -> Result<()> {
       }
       Some(TestSuite::Wasm) => {
         if coverage {
-          bail!("--coverage is not supported for wasm tests (LLVM instrument-coverage \
-                 does not target wasm32)");
+          bail!(
+            "--coverage is not supported for wasm tests (LLVM instrument-coverage \
+                 does not target wasm32)"
+          );
         }
         test_wasm(&sh)
       }
       Some(TestSuite::E2e) => {
         if coverage {
-          bail!("--coverage is not supported for e2e tests (LLVM instrument-coverage \
-                 does not target wasm32)");
+          bail!(
+            "--coverage is not supported for e2e tests (LLVM instrument-coverage \
+                 does not target wasm32)"
+          );
         }
         test_e2e(&mut sh)
       }
@@ -268,8 +272,8 @@ fn test_unit_with_coverage(sh: &Shell, output_path: Option<&std::path::Path>) ->
   // Collect per-crate coverage by generating a JSON report for each crate.
   let mut results = Vec::new();
   for &krate in COVERAGE_CRATES {
-    let json_str = cmd!(sh, "cargo llvm-cov report --json --package {krate} --summary-only")
-      .read()?;
+    let json_str =
+      cmd!(sh, "cargo llvm-cov report --json --package {krate} --summary-only").read()?;
     let summary = parse_llvm_cov_json(&json_str, krate)?;
     results.push(summary);
   }
@@ -307,10 +311,5 @@ fn parse_llvm_cov_json(json_str: &str, crate_name: &str) -> Result<CrateCoverage
   let covered = totals["covered"].as_u64().unwrap_or(0);
   let percent = totals["percent"].as_f64().unwrap_or(0.0);
 
-  Ok(CrateCoverage {
-    name: crate_name.to_string(),
-    covered,
-    total,
-    percent,
-  })
+  Ok(CrateCoverage { name: crate_name.to_string(), covered, total, percent })
 }
