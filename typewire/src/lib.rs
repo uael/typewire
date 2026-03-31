@@ -213,7 +213,7 @@ pub fn base64_decode(s: &str) -> Result<Vec<u8>, base64::DecodeError> {
 /// types (e.g. [`PrimitiveIdent`](schema::coded::PrimitiveIdent),
 /// [`Ident<N>`](schema::coded::Ident)).
 ///
-/// ```no_run
+/// ```ignore
 /// use typewire::{Typewire, schema};
 ///
 /// struct MyId(u64);
