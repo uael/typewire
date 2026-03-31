@@ -157,6 +157,10 @@ pub enum ReadReceipt {
 /// A single chat message with all nested types.
 #[derive(Clone, Typewire)]
 #[typewire(rename_all = "camelCase")]
+#[expect(
+  clippy::use_self,
+  reason = "recursive type must use concrete name; Self is invalid in struct field context"
+)]
 pub struct Message {
   pub id: MessageId,
   pub channel_id: ChannelId,
@@ -411,7 +415,7 @@ pub fn create_message(
   Ok(value)
 }
 
-/// Apply a ChatCommand and return a description of what happened.
+/// Apply a `ChatCommand` and return a description of what happened.
 ///
 /// # Errors
 ///
@@ -448,7 +452,7 @@ pub fn describe_command(
   Ok(desc)
 }
 
-/// Round-trip a ServerEvent.
+/// Round-trip a `ServerEvent`.
 ///
 /// # Errors
 ///
@@ -461,7 +465,7 @@ pub fn create_event(
   Ok(value)
 }
 
-/// Round-trip an untagged ReadReceipt.
+/// Round-trip an untagged `ReadReceipt`.
 ///
 /// # Errors
 ///
@@ -487,7 +491,7 @@ pub fn create_paginated_messages(
   Ok(value)
 }
 
-/// Round-trip a CreateChannelRequest (exercises proxy type validation).
+/// Round-trip a `CreateChannelRequest` (exercises proxy type validation).
 ///
 /// # Errors
 ///
@@ -500,7 +504,7 @@ pub fn create_channel_request(
   Ok(value)
 }
 
-/// Round-trip an ApiSuccess response (exercises flatten).
+/// Round-trip an `ApiSuccess` response (exercises flatten).
 ///
 /// # Errors
 ///
