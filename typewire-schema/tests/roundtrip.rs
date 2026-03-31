@@ -9,15 +9,15 @@ mod ts {
   };
 
   /// Helper: concatenate multiple records into a section.
-  fn concat_sections(records: &[&[u8]]) -> Vec<u8> {
-    let mut section = Vec::new();
+  fn concat_records(records: &[&[u8]]) -> Vec<u8> {
+    let mut buf = Vec::new();
     for r in records {
-      section.extend_from_slice(r);
+      buf.extend_from_slice(r);
     }
-    section
+    buf
   }
 
-  /// Helper: decode section bytes and generate TypeScript.
+  /// Helper: decode record bytes and generate TypeScript.
   fn generate_ts(bytes: &[u8]) -> String {
     let schemas = decode::parse_section(bytes).unwrap();
     typescript::generate(&schemas)
@@ -1219,8 +1219,8 @@ mod ts {
     });
     let t_bytes = t.as_bytes();
 
-    let section = concat_sections(&[prim_bytes, s_bytes, t_bytes]);
-    let ts = generate_ts(&section);
+    let records = concat_records(&[prim_bytes, s_bytes, t_bytes]);
+    let ts = generate_ts(&records);
 
     // Should have both named types (primitive records are skipped in output)
     assert!(ts.contains("export interface A {"), "got:\n{ts}");
