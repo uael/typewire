@@ -1,7 +1,6 @@
 //! Schema types for the typewire ecosystem.
 //!
-//! This crate defines the type metadata used throughout the
-//! [typewire pipeline](https://docs.rs/typewire#pipeline):
+//! This crate defines the type metadata used throughout the [typewire pipeline](https://docs.rs/typewire#pipeline):
 //! the derive macro encodes [`Schema`] values into link-section records,
 //! the [`decode`] module reconstructs them with owned data, and language
 //! emitters (e.g. [`typescript`]) consume them to generate declarations.
@@ -62,7 +61,7 @@ pub mod repr {
 
 /// Type aliases used by [`Schema`] and related types (decode-time).
 ///
-/// See the [`encode` variant](self::repr) for the derive-time counterpart.
+/// The encode-time counterpart uses `syn` AST types instead of owned data.
 #[cfg(all(feature = "decode", not(feature = "encode")))]
 pub mod repr {
   /// Type identifier — an owned `String` at decode-time.

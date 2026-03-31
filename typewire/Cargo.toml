@@ -10,8 +10,7 @@ homepage = "https://github.com/uael/typewire"
 documentation = "https://docs.rs/typewire"
 readme = "../README.md"
 
-# Keep the type_features list in xtask and the CI doc step
-# (.github/workflows/ci.yml) in sync with these features.
+# Keep this feature list in sync with xtask/src/main.rs (TYPE_FEATURES).
 [features]
 default = ["derive"]
 derive = ["dep:typewire-derive"]

@@ -14,7 +14,7 @@ cargo xtask fmt                      # Format code (requires nightly rustfmt)
 cargo xtask fmt --check              # Check formatting
 cargo xtask lint                     # Clippy + format check (-D warnings)
 cargo xtask lint --fix               # Auto-fix clippy + formatting
-cargo doc --no-deps --all            # Build documentation (-D warnings in CI)
+cargo xtask doc                      # Build documentation (-D warnings in CI)
 cargo deny check                     # License/advisory/ban auditing
 ```
 

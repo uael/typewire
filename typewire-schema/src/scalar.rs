@@ -13,7 +13,7 @@
 /// |--------|-----------|------------|
 /// | [`bool`](Scalar::bool) | [`bool`] | `boolean` |
 /// | [`u8`](Scalar::u8) .. [`u32`](Scalar::u32), [`i8`](Scalar::i8) .. [`i32`](Scalar::i32) | integer primitives | `number` |
-/// | [`u64`](Scalar::u64) .. [`u128`](Scalar::u128), [`i64`](Scalar::i64) .. [`i128`](Scalar::i128) | large integers | `number` |
+/// | [`u64`](Scalar::u64) .. [`u128`](Scalar::u128), [`i64`](Scalar::i64) .. [`i128`](Scalar::i128) | large integers | `number` (JS: lossy >2⁵³) |
 /// | [`usize`](Scalar::usize), [`isize`](Scalar::isize) | pointer-width integers | `number` |
 /// | [`f32`](Scalar::f32), [`f64`](Scalar::f64) | floating-point | `number` |
 /// | [`char`](Scalar::char) | single Unicode scalar | `string` |

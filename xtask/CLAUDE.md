@@ -1,6 +1,6 @@
 # xtask
 
-Dev automation. Single binary with subcommands for formatting, linting, and testing.
+Dev automation. Single binary with subcommands for formatting, linting, documentation, and testing.
 
 ## Commands
 
@@ -10,6 +10,7 @@ Dev automation. Single binary with subcommands for formatting, linting, and test
 | `cargo xtask fmt --check` | Check-only formatting |
 | `cargo xtask lint` | 9 clippy passes (all feature combos + wasm32) + fmt check |
 | `cargo xtask lint --fix` | Auto-fix mode |
+| `cargo xtask doc` | Build docs per-crate with correct feature sets |
 | `cargo xtask test` | All test suites |
 | `cargo xtask test unit` | Native tests + schema roundtrips (`--features typescript`) |
 | `cargo xtask test wasm` | wasm32 tests via `wasm-bindgen-test` |

@@ -2,8 +2,7 @@
 //!
 //! This module reads the raw bytes of a `typewire_schemas` link section
 //! and reconstructs the type metadata as [`Schema`] values with owned data.
-//! It is the decode stage of the
-//! [typewire pipeline](https://docs.rs/typewire#pipeline).
+//! It is the decode stage of the [typewire pipeline](https://docs.rs/typewire#pipeline).
 
 use crate::{
   Enum, EnumFlags, Field, FieldDefault, FieldFlags, Scalar, Schema, Struct, StructFlags,
