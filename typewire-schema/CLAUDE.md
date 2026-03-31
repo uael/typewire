@@ -35,7 +35,7 @@ All types are `#[repr(C, packed)]`, `Copy`, const-constructible. Derives `zeroco
 
 Key types: `Record<T>`, `Ident<N>`, `PrimitiveIdent`, `OptionIdent`, `SeqIdent`, `MapIdent`, `TupleIdent`, `Tag`, `FlatStruct`, `FlatEnum`, etc.
 
-The `typewire_schemas` link section (Apple: `__DATA,typewire_schemas`) contains concatenated `Record<T>` entries. Each `Record<T>` is laid out as `[u32le len][version byte][payload]`. The `SCHEMA_VERSION` constant (currently `1`) is embedded by the encoder and checked by the decoder, which rejects records with a mismatched version.
+The `typewire_version` link section (Apple: `__DATA,typewire_version`) contains a single `SectionHeader` byte (`SCHEMA_VERSION`, currently `1`), written once by the `typewire` crate when the `schemas` feature is enabled. The `typewire_schemas` link section (Apple: `__DATA,typewire_schemas`) contains concatenated `Record<T>` entries. Each `Record<T>` is laid out as `[u32le len][payload]`. The CLI validates the version section before parsing records; the decoder itself does not check versions.
 
 ## Tests
 

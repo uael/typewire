@@ -138,6 +138,24 @@ pub use typewire_derive::Typewire;
 /// the pipeline documentation.
 pub use typewire_schema as schema;
 
+// Emit the schema version header once per binary into a dedicated
+// section. The CLI reads this section to validate format compatibility
+// before parsing the records in `typewire_schemas`.
+#[cfg(feature = "schemas")]
+const _: () = {
+  #[cfg_attr(
+    target_vendor = "apple",
+    unsafe(link_section = "__DATA,typewire_version")
+  )]
+  #[cfg_attr(
+    not(target_vendor = "apple"),
+    unsafe(link_section = "typewire_version")
+  )]
+  #[used]
+  static __TYPEWIRE_VERSION: schema::coded::SectionHeader =
+    schema::coded::SectionHeader::CURRENT;
+};
+
 /// Base64-encode bytes to a string using the standard alphabet.
 ///
 /// Called by generated code for fields annotated with `#[typewire(base64)]`.

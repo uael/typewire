@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
 use object::{Object, ObjectSection};
-use typewire_schema::coded::SECTION_NAME;
+use typewire_schema::coded::{SCHEMA_VERSION, SECTION_NAME, VERSION_SECTION_NAME};
 
 #[derive(Parser)]
 #[command(name = "typewire", about = "Generate bindings from compiled Typewire schemas")]
@@ -32,6 +32,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   let cli = Cli::parse();
   let data = std::fs::read(&cli.binary)?;
   let obj = object::File::parse(&*data)?;
+
+  // Validate the schema version from the dedicated version section.
+  let version_section = obj.section_by_name(VERSION_SECTION_NAME).ok_or_else(|| {
+    format!("no {VERSION_SECTION_NAME} section found in {}", cli.binary.display())
+  })?;
+  let version_bytes = version_section.data()?;
+  if version_bytes.is_empty() {
+    return Err("empty version section".into());
+  }
+  let binary_version = version_bytes[0];
+  if binary_version != SCHEMA_VERSION {
+    return Err(
+      format!(
+        "schema version mismatch: binary has version {binary_version}, \
+         but this CLI expects version {SCHEMA_VERSION}"
+      )
+      .into(),
+    );
+  }
+
   let section = obj
     .section_by_name(SECTION_NAME)
     .ok_or_else(|| format!("no {SECTION_NAME} section found in {}", cli.binary.display()))?;
@@ -51,8 +71,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   if !cli.no_strip {
     if obj.format() == object::BinaryFormat::Wasm {
       let mut module = walrus::Module::from_buffer(&data)?;
-      let ids: Vec<_> =
-        module.customs.iter().filter(|(_, s)| s.name() == SECTION_NAME).map(|(id, _)| id).collect();
+      let ids: Vec<_> = module
+        .customs
+        .iter()
+        .filter(|(_, s)| s.name() == SECTION_NAME || s.name() == VERSION_SECTION_NAME)
+        .map(|(id, _)| id)
+        .collect();
       for id in ids {
         module.customs.delete(id);
       }

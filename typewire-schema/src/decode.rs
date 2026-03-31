@@ -7,7 +7,7 @@
 use crate::{
   Enum, EnumFlags, Field, FieldDefault, FieldFlags, Scalar, Schema, Struct, StructFlags,
   StructShape, Tagging, Transparent, Variant, VariantFlags, VariantKind,
-  coded::{FieldDefaultKind, SCHEMA_VERSION, StructShapeTag, Tag, TaggingKind, VariantKindTag},
+  coded::{FieldDefaultKind, StructShapeTag, Tag, TaggingKind, VariantKindTag},
 };
 
 // ---------------------------------------------------------------------------
@@ -18,10 +18,6 @@ use crate::{
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
-  #[error(
-    "schema version mismatch at offset {offset}: expected {expected}, got {actual}"
-  )]
-  VersionMismatch { offset: usize, expected: u8, actual: u8 },
   #[error("unexpected EOF: needed {needed} bytes, {remaining} remaining")]
   UnexpectedEof { needed: usize, remaining: usize },
   #[error("invalid tag byte: {0}")]
@@ -163,7 +159,10 @@ impl<'a> Reader<'a> {
 
 /// Parse a `typewire_schemas` section into a list of [`Schema`] definitions.
 ///
-/// Each record is a length-prefixed [`coded::Record<T>`](crate::coded::Record).
+/// The section contains length-prefixed
+/// [`coded::Record<T>`](crate::coded::Record) entries. Version
+/// validation is handled separately (the CLI checks the
+/// `typewire_version` section before calling this function).
 ///
 /// # Errors
 ///
@@ -184,16 +183,6 @@ pub fn parse_section(data: &[u8]) -> Result<Vec<Schema>, Error> {
       });
     }
     let record_end = reader.pos + record_len;
-
-    // Check the per-record version byte.
-    let version = reader.read_u8()?;
-    if version != SCHEMA_VERSION {
-      return Err(Error::VersionMismatch {
-        offset,
-        expected: SCHEMA_VERSION,
-        actual: version,
-      });
-    }
 
     schemas.push(parse_record(&mut reader)?);
     reader.pos = record_end;

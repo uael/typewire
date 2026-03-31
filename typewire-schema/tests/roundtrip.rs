@@ -9,15 +9,15 @@ mod ts {
   };
 
   /// Helper: concatenate multiple records into a section.
-  fn concat_sections(records: &[&[u8]]) -> Vec<u8> {
-    let mut section = Vec::new();
+  fn concat_records(records: &[&[u8]]) -> Vec<u8> {
+    let mut buf = Vec::new();
     for r in records {
-      section.extend_from_slice(r);
+      buf.extend_from_slice(r);
     }
-    section
+    buf
   }
 
-  /// Helper: decode section bytes and generate TypeScript.
+  /// Helper: decode record bytes and generate TypeScript.
   fn generate_ts(bytes: &[u8]) -> String {
     let schemas = decode::parse_section(bytes).unwrap();
     typescript::generate(&schemas)
@@ -1219,8 +1219,8 @@ mod ts {
     });
     let t_bytes = t.as_bytes();
 
-    let section = concat_sections(&[prim_bytes, s_bytes, t_bytes]);
-    let ts = generate_ts(&section);
+    let records = concat_records(&[prim_bytes, s_bytes, t_bytes]);
+    let ts = generate_ts(&records);
 
     // Should have both named types (primitive records are skipped in output)
     assert!(ts.contains("export interface A {"), "got:\n{ts}");
@@ -1299,21 +1299,6 @@ mod ts {
     data.extend_from_slice(&100u32.to_le_bytes());
     data.extend_from_slice(&[0u8; 5]);
     assert!(decode::parse_section(&data).is_err());
-  }
-
-  #[test]
-  fn version_mismatch_returns_error() {
-    // Build a valid record, then tamper with the version byte.
-    let record = Record::new(FlatPrimitive { tag: Tag::Primitive, scalar: Scalar::f32 });
-    let mut bytes = record.as_bytes().to_vec();
-    // The version byte is at offset 4 (right after the u32le length).
-    bytes[4] = SCHEMA_VERSION.wrapping_add(1);
-    let err = decode::parse_section(&bytes).unwrap_err();
-    let msg = err.to_string();
-    assert!(
-      msg.contains("schema version mismatch"),
-      "expected version mismatch error, got: {msg}"
-    );
   }
 
   #[test]

@@ -5,23 +5,26 @@
 //!
 //! # Binary format
 //!
-//! The `typewire_schemas` section is a sequence of self-delimiting records:
+//! The `typewire_version` section contains a single byte —
+//! [`SCHEMA_VERSION`] — written once by the `typewire` crate. The
+//! `typewire_schemas` section contains a sequence of self-delimiting
+//! records:
 //!
 //! ```text
-//! [u32le len][version byte][Tag byte][record-specific payload...]
-//! [u32le len][version byte][Tag byte][record-specific payload...]
+//! [u32le len][Tag byte][record-specific payload...]
+//! [u32le len][Tag byte][record-specific payload...]
 //! ...
 //! ```
 //!
-//! The `len` field counts all bytes after itself (including the version
-//! byte). The version byte must equal [`SCHEMA_VERSION`]; the decoder
-//! rejects records with a different version.
+//! The CLI validates the version section before parsing records.
 //!
-//! Each record starts with a `Tag` byte identifying its kind (Struct,
-//! Enum, Transparent, etc.). String identifiers use `Ident<N>` —
-//! a u32le length prefix followed by UTF-8 bytes. Type references use
-//! compound ident wrappers (`OptionIdent`, `SeqIdent`, `MapIdent`,
-//! etc.) that compose inner idents recursively.
+//! Each record's `len` field counts all bytes after itself (the `Tag`
+//! byte plus the payload). Each record starts with a `Tag` byte
+//! identifying its kind (Struct, Enum, Transparent, etc.). String
+//! identifiers use `Ident<N>` — a u32le length prefix followed by
+//! UTF-8 bytes. Type references use compound ident wrappers
+//! (`OptionIdent`, `SeqIdent`, `MapIdent`, etc.) that compose inner
+//! idents recursively.
 //!
 //! The extractor (see the `decode` module) reads these records back
 //! into [`Schema`](crate::Schema) values.
@@ -39,6 +42,13 @@ use crate::{EnumFlags, FieldFlags, Scalar, StructFlags, VariantFlags};
 ///
 /// On Apple platforms, the full section specifier is `__DATA,typewire_schemas`.
 pub const SECTION_NAME: &str = "typewire_schemas";
+
+/// The link-section name for the one-byte schema version header.
+///
+/// This section is written once by the `typewire` crate (when the
+/// `schemas` feature is enabled). The CLI reads it before parsing the
+/// records in [`SECTION_NAME`].
+pub const VERSION_SECTION_NAME: &str = "typewire_version";
 
 /// Schema format version. Incremented whenever the binary layout of
 /// `Record<T>` changes. The decoder rejects records whose version byte
@@ -72,34 +82,49 @@ const fn const_usize_to_u32(n: usize) -> u32 {
   u32::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])
 }
 
+// -- Section header ----------------------------------------------------
+
+/// One-byte section header written once at the start of the
+/// `typewire_schemas` section.
+///
+/// The `typewire` crate emits this as a `#[link_section]` static when
+/// the `schemas` feature is enabled, ensuring every compiled binary
+/// begins with a version byte that the decoder validates before parsing
+/// any records.
+#[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
+#[repr(C, packed)]
+pub struct SectionHeader {
+  pub version: u8,
+}
+
+impl SectionHeader {
+  /// Header for the current schema version.
+  pub const CURRENT: Self = Self { version: SCHEMA_VERSION };
+}
+
 // -- Self-delimiting record wrapper ------------------------------------
 
-/// Wraps a flat record `T` with a u32le length prefix and a version
-/// byte, making it self-delimiting when linkers concatenate same-named
-/// sections.
+/// Wraps a flat record `T` with a u32le length prefix, making it
+/// self-delimiting when linkers concatenate same-named sections.
 ///
-/// Layout: `[4-byte LE len][1-byte version][len-1 bytes of T]`.
+/// Layout: `[4-byte LE len][bytes of T]`.
 ///
-/// The `len` field counts all bytes after itself, including the version
-/// byte and the payload.
+/// The `len` field counts all bytes after itself (the payload).
 #[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(C, packed)]
 pub struct Record<T: Copy> {
   len: U32Le,
-  version: u8,
   data: T,
 }
 
 impl<T: Copy> Record<T> {
   /// # Panics
   ///
-  /// Panics if `size_of::<T>() + 1` (payload + version byte) exceeds
-  /// `u32::MAX`.
+  /// Panics if `size_of::<T>()` exceeds `u32::MAX`.
   pub const fn new(data: T) -> Self {
-    // +1 for the version byte
-    let size = core::mem::size_of::<T>() + 1;
+    let size = core::mem::size_of::<T>();
     assert!(size <= u32::MAX as usize);
-    Self { len: U32Le::new(const_usize_to_u32(size)), version: SCHEMA_VERSION, data }
+    Self { len: U32Le::new(const_usize_to_u32(size)), data }
   }
 }
 
