@@ -38,53 +38,53 @@
 #[expect(non_camel_case_types, reason = "Named after the Rust types they represent.")]
 #[repr(u8)]
 pub enum Scalar {
-  /// [`bool`] — JS `boolean`, TS `boolean`.
+  /// [`bool`]
   bool,
-  /// [`u8`] — JS `number`, TS `number`.
+  /// [`u8`]
   u8,
-  /// [`u16`] — JS `number`, TS `number`.
+  /// [`u16`]
   u16,
-  /// [`u32`] — JS `number`, TS `number`.
+  /// [`u32`]
   u32,
-  /// [`u64`] — JS `number` or `BigInt` (lossy), TS `number`.
+  /// [`u64`]
   u64,
-  /// [`u128`] — JS `number` or `BigInt` (lossy), TS `number`.
+  /// [`u128`]
   u128,
-  /// [`i8`] — JS `number`, TS `number`.
+  /// [`i8`]
   i8,
-  /// [`i16`] — JS `number`, TS `number`.
+  /// [`i16`]
   i16,
-  /// [`i32`] — JS `number`, TS `number`.
+  /// [`i32`]
   i32,
-  /// [`i64`] — JS `number` or `BigInt` (lossy), TS `number`.
+  /// [`i64`]
   i64,
-  /// [`i128`] — JS `number` or `BigInt` (lossy), TS `number`.
+  /// [`i128`]
   i128,
-  /// [`usize`] — JS `number`, TS `number`.
+  /// [`usize`]
   usize,
-  /// [`isize`] — JS `number`, TS `number`.
+  /// [`isize`]
   isize,
-  /// [`f32`] — JS `number`, TS `number`.
+  /// [`f32`]
   f32,
-  /// [`f64`] — JS `number`, TS `number`.
+  /// [`f64`]
   f64,
-  /// [`char`] — single-character JS `string`, TS `string`.
+  /// [`char`]
   char,
-  /// [`String`] / `Cow<str>` — JS `string`, TS `string`.
+  /// [`String`] / [`Cow<str>`](std::borrow::Cow)
   str,
-  /// `()` — JS `null`, TS `null`.
+  /// `()`
   Unit,
-  /// [`url::Url`](https://docs.rs/url/latest/url/struct.Url.html) — JS `string`, TS `string`.
+  /// [`url::Url`](https://docs.rs/url/latest/url/struct.Url.html)
   Url,
-  /// [`uuid::Uuid`](https://docs.rs/uuid/latest/uuid/struct.Uuid.html) — JS `string`, TS `string`.
+  /// [`uuid::Uuid`](https://docs.rs/uuid/latest/uuid/struct.Uuid.html)
   Uuid,
-  /// [`bytes::Bytes`](https://docs.rs/bytes/latest/bytes/struct.Bytes.html) — JS `Uint8ClampedArray`, TS `Uint8ClampedArray`.
+  /// [`bytes::Bytes`](https://docs.rs/bytes/latest/bytes/struct.Bytes.html)
   Bytes,
-  /// [`chrono::DateTime<Tz>`](https://docs.rs/chrono/latest/chrono/struct.DateTime.html) — RFC 3339 JS `string`, TS `string`.
+  /// [`chrono::DateTime<Tz>`](https://docs.rs/chrono/latest/chrono/struct.DateTime.html)
   DateTime,
-  /// [`serde_json::Value`](https://docs.rs/serde_json/latest/serde_json/enum.Value.html) — arbitrary JS value, TS `any`.
+  /// [`serde_json::Value`](https://docs.rs/serde_json/latest/serde_json/enum.Value.html)
   SerdeJsonValue,
-  /// [`fractional_index::FractionalIndex`](https://docs.rs/fractional_index/latest/fractional_index/struct.FractionalIndex.html) — JS `string`, TS `string`.
+  /// [`fractional_index::FractionalIndex`](https://docs.rs/fractional_index/latest/fractional_index/struct.FractionalIndex.html)
   FractionalIndex,
 }
 
