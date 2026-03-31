@@ -1,0 +1,59 @@
+name: Coverage
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Run tests with coverage
+        run: cargo xtask test unit --coverage --coverage-output target/coverage.json
+
+      - name: Store coverage as git note
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          # Build the note body from the JSON output.
+          NOTE=$(python3 -c "
+          import json, sys
+          data = json.load(open('target/coverage.json'))
+          for c in data:
+              print(f\"{c['name']}: {c['percent']:.1f}%\")
+          ")
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Fetch existing coverage notes (ignore failure on first run).
+          git fetch origin refs/notes/coverage:refs/notes/coverage 2>/dev/null || true
+
+          # Attach coverage note to the current commit.
+          git notes --ref=coverage add -f -m "$NOTE" HEAD
+
+          # Push the notes ref.
+          git push origin refs/notes/coverage
+
+      - name: Check coverage delta
+        run: |
+          python3 .github/scripts/coverage-delta.py target/coverage.json
