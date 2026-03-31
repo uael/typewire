@@ -8,7 +8,7 @@
 use std::fmt::Write;
 
 use crate::{
-  Enum, EnumFlags, FieldDefault, FieldFlags, Scalar, Schema, Struct, StructShape, Tagging,
+  Enum, EnumFlags, Field, FieldDefault, FieldFlags, Scalar, Schema, Struct, StructShape, Tagging,
   Transparent, Variant, VariantFlags, VariantKind,
 };
 
@@ -49,7 +49,7 @@ fn emit_struct(s: &Struct, out: &mut String) {
         if f.flags.intersects(FieldFlags::SKIP_SER | FieldFlags::SKIP_DE) {
           continue;
         }
-        let ts_type = ty_to_ts(&f.ty);
+        let ts_type = field_ty_to_ts(f);
         // A field is optional in TypeScript only when it has an explicit
         // `#[serde(default)]` or `#[serde(default = "...")]`. Note that
         // `Option<T>` fields without `default` are emitted as required
@@ -119,7 +119,7 @@ fn emit_ext_tagged_variant(v: &Variant) -> String {
     VariantKind::Unit => format!("\"{}\"", v.wire_name),
     VariantKind::Named(fields) => {
       let inner: Vec<_> =
-        fields.iter().map(|f| format!("{}: {}", f.wire_name, ty_to_ts(&f.ty))).collect();
+        fields.iter().map(|f| format!("{}: {}", f.wire_name, field_ty_to_ts(f))).collect();
       format!("{{ \"{}\": {{ {} }} }}", v.wire_name, inner.join("; "))
     }
     VariantKind::Unnamed(idents) => {
@@ -141,7 +141,7 @@ fn emit_int_tagged_variant(v: &Variant, tag_key: &str) -> String {
     VariantKind::Named(fields) => {
       let mut parts = vec![format!("{tag_key}: \"{}\"", v.wire_name)];
       for f in fields {
-        parts.push(format!("{}: {}", f.wire_name, ty_to_ts(&f.ty)));
+        parts.push(format!("{}: {}", f.wire_name, field_ty_to_ts(f)));
       }
       format!("{{ {} }}", parts.join("; "))
     }
@@ -162,7 +162,7 @@ fn emit_adj_tagged_variant(v: &Variant, tag_key: &str, content_key: &str) -> Str
     }
     VariantKind::Named(fields) => {
       let inner: Vec<_> =
-        fields.iter().map(|f| format!("{}: {}", f.wire_name, ty_to_ts(&f.ty))).collect();
+        fields.iter().map(|f| format!("{}: {}", f.wire_name, field_ty_to_ts(f))).collect();
       format!("{{ {tag_key}: \"{}\"; {content_key}: {{ {} }} }}", v.wire_name, inner.join("; "))
     }
     VariantKind::Unnamed(idents) => {
@@ -181,7 +181,7 @@ fn emit_untagged_variant(v: &Variant) -> String {
     VariantKind::Unit => "null".to_string(),
     VariantKind::Named(fields) => {
       let parts: Vec<_> =
-        fields.iter().map(|f| format!("{}: {}", f.wire_name, ty_to_ts(&f.ty))).collect();
+        fields.iter().map(|f| format!("{}: {}", f.wire_name, field_ty_to_ts(f))).collect();
       format!("{{ {} }}", parts.join("; "))
     }
     VariantKind::Unnamed(idents) => {
@@ -198,6 +198,22 @@ fn emit_untagged_variant(v: &Variant) -> String {
 // ---------------------------------------------------------------------------
 // Type resolution from Schema used as type reference
 // ---------------------------------------------------------------------------
+
+/// Resolve a field's TypeScript type, accounting for encoding flags like
+/// `#[typewire(base64)]` (wire format is a base64 string) and
+/// `#[serde(with = "serde_bytes")]` (wire format is `Uint8Array`).
+fn field_ty_to_ts(f: &Field) -> String {
+  if f.flags.contains(FieldFlags::BASE64) {
+    return "string".to_string();
+  }
+  if f.flags.contains(FieldFlags::SERDE_BYTES) {
+    return "Uint8Array".to_string();
+  }
+  if f.flags.contains(FieldFlags::DISPLAY) {
+    return "string".to_string();
+  }
+  ty_to_ts(&f.ty)
+}
 
 fn ty_to_ts(schema: &Schema) -> String {
   match schema {

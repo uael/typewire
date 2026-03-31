@@ -46,6 +46,7 @@ Currently supported targets: **WebAssembly** (wasm32) with TypeScript codegen. *
 | `typewire-schema/` | Schema metadata: coded binary format, encode/decode, language emitters (TypeScript, more planned) |
 | `xtask/` | Dev automation: fmt, lint (9 clippy passes), test (unit/wasm/e2e) |
 | `examples/todo-app/` | End-to-end example: wasm cdylib with TypeScript type-checking |
+| `examples/chat-app/` | Comprehensive example: all enum tagging modes, newtypes, base64, HashMap, proxy types |
 
 ### Feature Matrix
 

@@ -121,7 +121,8 @@ fn lint(sh: &Shell, fix: bool) -> Result<()> {
   cmd!(sh, "cargo clippy -p typewire-derive --tests {args...}").run_echo()?;
 
   // wasm32: typewire + examples (default features).
-  cmd!(sh, "cargo clippy -p typewire -p todo-app --target {WASM_TARGET} {args...}").run_echo()?;
+  cmd!(sh, "cargo clippy -p typewire -p todo-app -p chat-app --target {WASM_TARGET} {args...}")
+    .run_echo()?;
 
   // wasm32: typewire with all optional type features.
   cmd!(sh, "cargo clippy -p typewire --target {WASM_TARGET} --features {type_features} {args...}")
@@ -161,25 +162,31 @@ fn test_wasm(sh: &Shell) -> Result<()> {
 }
 
 fn test_e2e(sh: &mut Shell) -> Result<()> {
+  test_e2e_example(sh, "todo-app", "todo_app")?;
+  test_e2e_example(sh, "chat-app", "chat_app")?;
+  Ok(())
+}
+
+fn test_e2e_example(sh: &mut Shell, example: &str, crate_name: &str) -> Result<()> {
+  let pkg = format!("{example}");
+  sh.set_current_dir(ROOT.as_path());
+
   // Build wasm.
-  cmd!(sh, "cargo build -p todo-app --target {WASM_TARGET} --release").run_echo()?;
+  cmd!(sh, "cargo build -p {pkg} --target {WASM_TARGET} --release").run_echo()?;
 
   // Generate TypeScript (strips the section by default) and diff against
   // the checked-in snapshot.
-  cmd!(
-    sh,
-    "cargo run -p typewire --features cli -- target/{WASM_TARGET}/release/todo_app.wasm -o examples/todo-app/types.gen.d.ts"
-  )
-  .run_echo()?;
-  cmd!(sh, "diff examples/todo-app/types.d.ts examples/todo-app/types.gen.d.ts").run_echo()?;
+  let wasm_path = format!("target/{WASM_TARGET}/release/{crate_name}.wasm");
+  let gen_path = format!("examples/{example}/types.gen.d.ts");
+  let snap_path = format!("examples/{example}/types.d.ts");
+  cmd!(sh, "cargo run -p typewire --features cli -- {wasm_path} -o {gen_path}").run_echo()?;
+  cmd!(sh, "diff {snap_path} {gen_path}").run_echo()?;
 
   // Assert the typewire_schemas section was stripped from the binary.
-  let stripped_output = cmd!(
-    sh,
-    "cargo run -p typewire --features cli -- target/{WASM_TARGET}/release/todo_app.wasm -o /dev/null"
-  )
-  .ignore_status()
-  .output()?;
+  let stripped_output =
+    cmd!(sh, "cargo run -p typewire --features cli -- {wasm_path} -o /dev/null")
+      .ignore_status()
+      .output()?;
   assert!(
     !stripped_output.status.success(),
     "typewire_schemas section should have been stripped, but CLI succeeded"
@@ -191,14 +198,15 @@ fn test_e2e(sh: &mut Shell) -> Result<()> {
   );
 
   // Generate JS bindings.
+  let pkg_dir = format!("examples/{example}/pkg");
   cmd!(
     sh,
-    "wasm-bindgen target/{WASM_TARGET}/release/todo_app.wasm --out-dir examples/todo-app/pkg --target nodejs"
+    "wasm-bindgen target/{WASM_TARGET}/release/{crate_name}.wasm --out-dir {pkg_dir} --target nodejs"
   )
   .run_echo()?;
 
   // Type-check and run.
-  sh.set_current_dir(ROOT.join("examples/todo-app"));
+  sh.set_current_dir(ROOT.join(format!("examples/{example}")));
   cmd!(sh, "npm install --prefer-offline").run_echo()?;
   cmd!(sh, "npx tsc --noEmit").run_echo()?;
   cmd!(sh, "npx tsx test.ts").run_echo()?;
