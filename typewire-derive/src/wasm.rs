@@ -891,8 +891,7 @@ fn ext_tagged_patch_js(e: &SchemaEnum) -> TokenStream {
           }
           let content_fn = format_ident!("__tw_{type_name}_content_{vname}");
           let destruct_fn = format_ident!("__tw_{type_name}_destruct_{vname}");
-          let patches =
-            variant_patch_fields(&active, &type_name, Some(vname), &quote! { &__content });
+          let patches = variant_patch_fields(&active, &type_name, vname, &quote! { &__content });
 
           Some(quote! {
             #name::#vname { #(#binds,)* .. } => {
@@ -1026,8 +1025,8 @@ fn all_unit_tag_from_js(
   tagged_variants: &[&SchemaVariant],
   untagged_fallbacks: &[TokenStream],
   other_fallback: &TokenStream,
-  has_fallbacks: bool,
 ) -> TokenStream {
+  let has_fallbacks = !untagged_fallbacks.is_empty() || !other_fallback.is_empty();
   let string_arms: Vec<TokenStream> = tagged_variants
     .iter()
     .map(|v| {
@@ -1088,14 +1087,7 @@ fn int_tagged_from_js(e: &SchemaEnum, tag: &str) -> TokenStream {
 
   // All-unit enums have no JS dispatch helper — use direct tag string matching.
   if all_unit {
-    return all_unit_tag_from_js(
-      name,
-      tag,
-      &tagged_variants,
-      &untagged_fallbacks,
-      &other_fallback,
-      has_fallbacks,
-    );
+    return all_unit_tag_from_js(name, tag, &tagged_variants, &untagged_fallbacks, &other_fallback);
   }
 
   let dispatch_fn = format_ident!("__tw_{type_name}_dispatch");
@@ -1230,7 +1222,7 @@ fn int_tagged_patch_js(e: &SchemaEnum) -> TokenStream {
           let binds = field_binds(fields);
           let destruct_fn = format_ident!("__tw_{type_name}_destruct_{vname}");
           let active = active_fields(fields);
-          let patches = variant_patch_fields(&active, &type_name, Some(vname), &quote! { old });
+          let patches = variant_patch_fields(&active, &type_name, vname, &quote! { old });
 
           Some(quote! {
             #name::#vname { #(#binds,)* .. } => {
@@ -1346,14 +1338,7 @@ fn adj_tagged_from_js(e: &SchemaEnum, tag: &str) -> TokenStream {
 
   // All-unit enums have no JS dispatch helper — use direct tag string matching.
   if all_unit {
-    return all_unit_tag_from_js(
-      name,
-      tag,
-      &tagged_variants,
-      &untagged_fallbacks,
-      &other_fallback,
-      has_fallbacks,
-    );
+    return all_unit_tag_from_js(name, tag, &tagged_variants, &untagged_fallbacks, &other_fallback);
   }
 
   let dispatch_fn = format_ident!("__tw_{type_name}_dispatch");
@@ -1507,8 +1492,7 @@ fn adj_tagged_patch_js(e: &SchemaEnum, content_key: &str) -> TokenStream {
           let binds = field_binds(fields);
           let destruct_fn = format_ident!("__tw_{type_name}_destruct_{vname}");
           let active = active_fields(fields);
-          let patches =
-            variant_patch_fields(&active, &type_name, Some(vname), &quote! { &__content });
+          let patches = variant_patch_fields(&active, &type_name, vname, &quote! { &__content });
 
           Some(quote! {
             #name::#vname { #(#binds,)* .. } => {
@@ -1801,12 +1785,11 @@ fn active_fields(fields: &[SchemaField]) -> Vec<&SchemaField> {
 
 /// Generate `patch_js` calls for active named fields of an enum variant.
 /// Fields are read from `__varr` (the destruct array); setter fns write to
-/// `setter_target`. Variant name is included in setter fn names when `vname`
-/// is `Some` (enum variants) vs `None` (top-level structs).
+/// `setter_target`. The variant name is included in setter fn names.
 fn variant_patch_fields(
   active: &[&SchemaField],
   type_name: &str,
-  vname: Option<&Ident>,
+  vname: &Ident,
   setter_target: &TokenStream,
 ) -> Vec<TokenStream> {
   let mut arr_idx: u32 = 0;
@@ -1825,10 +1808,7 @@ fn variant_patch_fields(
       arr_idx += 1;
       let ident_ts = quote! { #ident };
       let to_js = field_to_js_expr(&ident_ts, f);
-      let setter_fn = vname.map_or_else(
-        || format_ident!("__tw_{type_name}_set_{ident}"),
-        |v| format_ident!("__tw_{type_name}_set_{v}_{ident}"),
-      );
+      let setter_fn = format_ident!("__tw_{type_name}_set_{vname}_{ident}");
       let is_special =
         f.flags.intersects(FieldFlags::BASE64 | FieldFlags::DISPLAY | FieldFlags::SERDE_BYTES);
       if is_special {
