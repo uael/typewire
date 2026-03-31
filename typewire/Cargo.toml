@@ -31,8 +31,8 @@ required-features = ["cli"]
 
 
 [dependencies]
-typewire-derive = { version = "=0.0.2", path = "../typewire-derive", optional = true }
-typewire-schema = { version = "=0.0.2", path = "../typewire-schema" }
+typewire-derive = { version = "0.0.2", path = "../typewire-derive", optional = true }
+typewire-schema = { version = "0.0.2", path = "../typewire-schema" }
 clap = { version = "4", features = ["derive"], optional = true }
 object = { version = "0.39", features = ["read", "wasm"], optional = true }
 walrus = { version = "0.26", optional = true }
@@ -58,7 +58,7 @@ trybuild = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 indexmap = "2"
-typewire = { version = "=0.0.2", path = ".", features = ["base64", "serde_json", "indexmap"] }
+typewire = { version = "0.0.2", path = ".", features = ["base64", "serde_json", "indexmap"] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen = "0.2"
