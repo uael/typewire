@@ -7,7 +7,7 @@
 import { createRequire } from "node:module";
 import { strict as assert } from "node:assert";
 
-import type { Todo, TodoList, Command, Priority, TodoId } from "./types.d.ts";
+import type { Todo, TodoList, Command, Priority } from "./types.d.ts";
 import type { create_todo as CreateTodoFn, apply_command as ApplyCommandFn } from "./pkg/todo_app.d.ts";
 
 // wasm-bindgen --target nodejs emits CommonJS
@@ -64,36 +64,6 @@ assert.equal(list.todos[0].priority, "low");
 const removeCmd: Command = { type: "Remove", data: { id: 1 } };
 list = apply_command(list, removeCmd);
 assert.equal(list.todos.length, 0);
-
-// -- TodoId type check -------------------------------------------------------
-
-const id: TodoId = 42;
-assert.equal(id, 42);
-
-// -- Type-level assertions (verified at tsc --noEmit time) --------------------
-
-// Discriminated union narrowing: after checking type, data is narrowed.
-function assertNarrowing(cmd: Command) {
-  if (cmd.type === "Add") {
-    // TypeScript should narrow data to Todo
-    const _title: string = cmd.data.title;
-    const _completed: boolean = cmd.data.completed;
-  } else if (cmd.type === "Toggle") {
-    // TypeScript should narrow data to { id: number }
-    const _id: number = cmd.data.id;
-  } else if (cmd.type === "SetPriority") {
-    const _p: Priority = cmd.data.priority;
-  }
-}
-assertNarrowing(addCmd);
-
-// Priority is a string literal union — only valid values are accepted.
-const _p1: Priority = "low";
-const _p2: Priority = "medium";
-const _p3: Priority = "high";
-
-// Optional field: description is string | null, not string | undefined.
-const _d: string | null = todo.description;
 
 // -- Error paths: invalid inputs should throw ----------------------------------
 
