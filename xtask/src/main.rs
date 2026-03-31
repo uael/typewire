@@ -168,11 +168,10 @@ fn test_e2e(sh: &mut Shell) -> Result<()> {
 }
 
 fn test_e2e_example(sh: &mut Shell, example: &str, crate_name: &str) -> Result<()> {
-  let pkg = format!("{example}");
   sh.set_current_dir(ROOT.as_path());
 
   // Build wasm.
-  cmd!(sh, "cargo build -p {pkg} --target {WASM_TARGET} --release").run_echo()?;
+  cmd!(sh, "cargo build -p {example} --target {WASM_TARGET} --release").run_echo()?;
 
   // Generate TypeScript (strips the section by default) and diff against
   // the checked-in snapshot.
