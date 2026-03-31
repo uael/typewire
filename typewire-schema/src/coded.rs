@@ -8,10 +8,14 @@
 //! The `typewire_schemas` section is a sequence of self-delimiting records:
 //!
 //! ```text
-//! [u32le len][Tag byte][record-specific payload...]
-//! [u32le len][Tag byte][record-specific payload...]
+//! [u32le len][version byte][Tag byte][record-specific payload...]
+//! [u32le len][version byte][Tag byte][record-specific payload...]
 //! ...
 //! ```
+//!
+//! The `len` field counts all bytes after itself (including the version
+//! byte). The version byte must equal [`SCHEMA_VERSION`]; the decoder
+//! rejects records with a different version.
 //!
 //! Each record starts with a `Tag` byte identifying its kind (Struct,
 //! Enum, Transparent, etc.). String identifiers use `Ident<N>` —
@@ -35,6 +39,11 @@ use crate::{EnumFlags, FieldFlags, Scalar, StructFlags, VariantFlags};
 ///
 /// On Apple platforms, the full section specifier is `__DATA,typewire_schemas`.
 pub const SECTION_NAME: &str = "typewire_schemas";
+
+/// Schema format version. Incremented whenever the binary layout of
+/// `Record<T>` changes. The decoder rejects records whose version byte
+/// does not match this constant.
+pub const SCHEMA_VERSION: u8 = 1;
 
 // -- Little-endian u32 --------------------------------------------------
 
@@ -65,25 +74,32 @@ const fn const_usize_to_u32(n: usize) -> u32 {
 
 // -- Self-delimiting record wrapper ------------------------------------
 
-/// Wraps a flat record `T` with a u32le length prefix, making it
-/// self-delimiting when linkers concatenate same-named sections.
+/// Wraps a flat record `T` with a u32le length prefix and a version
+/// byte, making it self-delimiting when linkers concatenate same-named
+/// sections.
 ///
-/// Layout: `[4-byte LE len][len bytes of T]`.
+/// Layout: `[4-byte LE len][1-byte version][len-1 bytes of T]`.
+///
+/// The `len` field counts all bytes after itself, including the version
+/// byte and the payload.
 #[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(C, packed)]
 pub struct Record<T: Copy> {
   len: U32Le,
+  version: u8,
   data: T,
 }
 
 impl<T: Copy> Record<T> {
   /// # Panics
   ///
-  /// Panics if `size_of::<T>()` exceeds `u32::MAX`.
+  /// Panics if `size_of::<T>() + 1` (payload + version byte) exceeds
+  /// `u32::MAX`.
   pub const fn new(data: T) -> Self {
-    let size = core::mem::size_of::<T>();
+    // +1 for the version byte
+    let size = core::mem::size_of::<T>() + 1;
     assert!(size <= u32::MAX as usize);
-    Self { len: U32Le::new(const_usize_to_u32(size)), data }
+    Self { len: U32Le::new(const_usize_to_u32(size)), version: SCHEMA_VERSION, data }
   }
 }
 

@@ -35,8 +35,8 @@ All types are `#[repr(C, packed)]`, `Copy`, const-constructible. Derives `zeroco
 
 Key types: `Record<T>`, `Ident<N>`, `PrimitiveIdent`, `OptionIdent`, `SeqIdent`, `MapIdent`, `TupleIdent`, `Tag`, `FlatStruct`, `FlatEnum`, etc.
 
-The `typewire_schemas` link section (Apple: `__DATA,typewire_schemas`) contains concatenated `Record<T>` entries.
+The `typewire_schemas` link section (Apple: `__DATA,typewire_schemas`) contains concatenated `Record<T>` entries. Each `Record<T>` is laid out as `[u32le len][version byte][payload]`. The `SCHEMA_VERSION` constant (currently `1`) is embedded by the encoder and checked by the decoder, which rejects records with a mismatched version.
 
 ## Tests
 
-`tests/roundtrip.rs` — 43 tests gated on `feature = "typescript"`. Run via `cargo xtask test unit` (which passes `--features typescript`).
+`tests/roundtrip.rs` — 46 tests gated on `feature = "typescript"`. Run via `cargo xtask test unit` (which passes `--features typescript`).

@@ -1302,6 +1302,21 @@ mod ts {
   }
 
   #[test]
+  fn version_mismatch_returns_error() {
+    // Build a valid record, then tamper with the version byte.
+    let record = Record::new(FlatPrimitive { tag: Tag::Primitive, scalar: Scalar::f32 });
+    let mut bytes = record.as_bytes().to_vec();
+    // The version byte is at offset 4 (right after the u32le length).
+    bytes[4] = SCHEMA_VERSION.wrapping_add(1);
+    let err = decode::parse_section(&bytes).unwrap_err();
+    let msg = err.to_string();
+    assert!(
+      msg.contains("schema version mismatch"),
+      "expected version mismatch error, got: {msg}"
+    );
+  }
+
+  #[test]
   fn skipped_variant_omitted_from_ts() {
     type V1 = FlatVariant<3, 3>;
     type V2 = FlatVariant<6, 6>;
