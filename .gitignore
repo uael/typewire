@@ -64,6 +64,10 @@ examples/*/*.gen.d.ts
 !experiments/**/*.wasm
 !experiments/**/*.mjs
 
+# Documentation
+!docs/
+!docs/**/*.md
+
 # Claude
 !CLAUDE.md
 !.claude/
