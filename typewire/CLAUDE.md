@@ -16,7 +16,7 @@ typewire is a derive-based **cross-language type bridging** framework. WASM/Type
 
 ```rust
 pub trait Typewire: Sized {
-  type Ident: Copy + 'static;             // compile-time schema identity
+  type Ident: schema::coded::SchemaId; // compile-time schema identity (sealed)
   const IDENT: Self::Ident;
   fn or_default() -> Option<Self>;        // implicit default for absent fields
 

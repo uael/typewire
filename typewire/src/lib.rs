@@ -236,7 +236,7 @@ pub trait Typewire: Sized {
   /// For compound types it is a nested ident like
   /// [`coded::OptionIdent`](schema::coded::OptionIdent) or
   /// [`coded::SeqIdent`](schema::coded::SeqIdent).
-  type Ident: Copy + 'static;
+  type Ident: schema::coded::SchemaId;
 
   /// The identity constant for this type.
   const IDENT: Self::Ident;
