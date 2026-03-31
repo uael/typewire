@@ -1,11 +1,153 @@
+//! Derive-based cross-language type bridging for Rust.
+//!
+//! `typewire` provides the [`Typewire`] trait and a derive macro that generates
+//! platform-specific conversion methods and compile-time schema records from
+//! your Rust types. Define types once in Rust, get type-safe foreign-language
+//! bindings and declarations automatically.
+//!
+//! Currently supported targets:
+//! - **WebAssembly** (wasm32) — `to_js` / `from_js` / `patch_js` via
+//!   `wasm-bindgen`, with TypeScript `.d.ts` generation
+//! - **Kotlin** and **Swift** — planned
+//!
+//! # Quick start
+//!
+//! ```
+//! use typewire::Typewire;
+//!
+//! #[derive(Typewire)]
+//! #[typewire(rename_all = "camelCase")]
+//! struct CreateUser {
+//!   user_name: String,
+//!   age: u32,
+//!   email: Option<String>,
+//! }
+//!
+//! // Option<T> fields implicitly default to None when absent
+//! assert_eq!(<Option<String>>::or_default(), Some(None));
+//!
+//! // Non-optional types have no implicit default
+//! assert!(String::or_default().is_none());
+//! ```
+//!
+//! On `wasm32`, this generates conversions matching the serde wire shape
+//! (`{ "userName": ..., "age": ..., "email": ... }`), plus a `patch_js`
+//! that updates foreign objects in place by diffing only changed fields.
+//!
+//! # Pipeline
+//!
+//! ```text
+//! #[derive(Typewire)]  →  encode (link section)  →  decode  →  declarations
+//!      (derive)             (typewire-schema)        (CLI)      (codegen)
+//! ```
+//!
+//! 1. [`#[derive(Typewire)]`](Typewire) analyzes types and emits platform-gated
+//!    conversion methods + schema records in link sections (when the `schemas`
+//!    feature is enabled)
+//! 2. The `typewire` CLI extracts schema records from compiled binaries and
+//!    generates typed declarations for the target language
+//! 3. The generated declarations match the wire format of the Rust types
+//!
+//! # Built-in type implementations
+//!
+//! | Category | Types |
+//! |----------|-------|
+//! | Booleans | [`bool`] |
+//! | Integers | [`i8`], [`i16`], [`i32`], [`u8`], [`u16`], [`u32`] (exact) |
+//! | Big integers | [`i64`], [`u64`], [`i128`], [`u128`], [`isize`], [`usize`] |
+//! | Floats | [`f32`], [`f64`] |
+//! | Strings | [`String`], [`Cow<str>`](std::borrow::Cow), [`char`] |
+//! | Unit | `()` |
+//! | Options | [`Option<T>`] |
+//! | Sequences | [`Vec<T>`], `[T; N]` |
+//! | Maps | [`HashMap`](std::collections::HashMap), [`BTreeMap`](std::collections::BTreeMap) |
+//! | Tuples | `(A, B, ...)` up to 12 elements |
+//! | Smart pointers | [`Box<T>`], [`Arc<T>`](std::sync::Arc), [`Rc<T>`](std::rc::Rc) |
+//!
+//! With optional features: `uuid`, `chrono`, `url`, `bytes`, `indexmap`,
+//! `serde_json`, `fractional_index`.
+//!
+//! # Features
+//!
+//! | Feature | What it enables |
+//! |---------|----------------|
+//! | `derive` *(default)* | Re-exports [`#[derive(Typewire)]`](Typewire) |
+//! | `schemas` | Embeds schema records in link sections for codegen |
+//! | `uuid` | [`Typewire`] impl for `uuid::Uuid` |
+//! | `chrono` | [`Typewire`] impl for `chrono::DateTime` |
+//! | `url` | [`Typewire`] impl for `url::Url` |
+//! | `bytes` | [`Typewire`] impl for `bytes::Bytes` |
+//! | `indexmap` | [`Typewire`] impls for `IndexMap` / `IndexSet` |
+//! | `base64` | [`base64_encode`] / [`base64_decode`] helpers |
+//! | `serde_json` | [`Typewire`] impl for `serde_json::Value` |
+//! | `cli` | Binary target for schema extraction + declaration generation |
+
 mod error;
 
+/// Conversion errors produced during foreign-language value decoding.
+///
+/// See [`Error`] for variant documentation.
 pub use error::Error;
+/// Derive macro for the [`Typewire`] trait.
+///
+/// See the [`typewire_derive`] crate for the full attribute reference.
+///
+/// # Examples
+///
+/// Named struct with field renaming:
+///
+/// ```
+/// use typewire::Typewire;
+///
+/// #[derive(Typewire)]
+/// #[typewire(rename_all = "camelCase")]
+/// struct User {
+///   user_name: String,
+///   email: Option<String>,
+/// }
+/// ```
+///
+/// Internally-tagged enum:
+///
+/// ```
+/// use typewire::Typewire;
+///
+/// #[derive(Typewire)]
+/// #[typewire(tag = "kind")]
+/// enum Shape {
+///   Circle { radius: f64 },
+///   Rect { width: f64, height: f64 },
+/// }
+/// ```
+///
+/// Transparent newtype:
+///
+/// ```
+/// use typewire::Typewire;
+///
+/// #[derive(Typewire)]
+/// #[typewire(transparent)]
+/// struct UserId(String);
+/// ```
 #[cfg(feature = "derive")]
 pub use typewire_derive::Typewire;
+/// Schema metadata crate, re-exported for use by generated code.
+///
+/// End users typically don't interact with this directly — it is used by
+/// the derive macro and the `typewire` CLI. See [`typewire_schema`] for
+/// the pipeline documentation.
 pub use typewire_schema as schema;
 
-/// Base64-encode bytes to a string. Used by `#[typewire(base64)]`.
+/// Base64-encode bytes to a string using the standard alphabet.
+///
+/// Called by generated code for fields annotated with `#[typewire(base64)]`.
+///
+/// ```
+/// # #[cfg(feature = "base64")] {
+/// let encoded = typewire::base64_encode(b"hello");
+/// assert_eq!(encoded, "aGVsbG8=");
+/// # }
+/// ```
 #[cfg(feature = "base64")]
 #[must_use]
 pub fn base64_encode(bytes: &[u8]) -> String {
@@ -13,76 +155,166 @@ pub fn base64_encode(bytes: &[u8]) -> String {
   base64::engine::general_purpose::STANDARD.encode(bytes)
 }
 
-/// Base64-decode a string to bytes. Used by `#[typewire(base64)]`.
+/// Base64-decode a string to bytes using the standard alphabet.
+///
+/// Called by generated code for fields annotated with `#[typewire(base64)]`.
 ///
 /// # Errors
 ///
-/// Returns an error if the input is not valid base64.
+/// Returns [`base64::DecodeError`] if the input is not valid base64.
+///
+/// ```
+/// # #[cfg(feature = "base64")] {
+/// let bytes = typewire::base64_decode("aGVsbG8=").unwrap();
+/// assert_eq!(bytes, b"hello");
+///
+/// assert!(typewire::base64_decode("not valid!").is_err());
+/// # }
+/// ```
 #[cfg(feature = "base64")]
 pub fn base64_decode(s: &str) -> Result<Vec<u8>, base64::DecodeError> {
   use base64::Engine as _;
   base64::engine::general_purpose::STANDARD.decode(s)
 }
 
-/// Bidirectional conversion between Rust types and JavaScript values.
+/// Bidirectional conversion between Rust types and foreign-language values.
+///
+/// This is the core trait of the typewire framework. It provides:
+///
+/// - **`Ident` / `IDENT`** — a compile-time type identity used by the schema
+///   pipeline to embed type metadata in link sections (always available)
+/// - **`or_default()`** — implicit defaults for absent fields (always available)
+/// - **Platform-specific methods** — conversion to/from foreign values, gated
+///   by `#[cfg]` (e.g. `to_js`/`from_js`/`patch_js` on `wasm32`)
+///
+/// # Deriving
+///
+/// Use [`#[derive(Typewire)]`](typewire_derive) to generate all implementations
+/// automatically. The derive respects serde-compatible attributes:
+///
+/// ```
+/// use typewire::Typewire;
+///
+/// #[derive(Clone, PartialEq, Debug, Typewire)]
+/// #[typewire(rename_all = "camelCase")]
+/// struct Point {
+///   x_coord: f64,
+///   y_coord: f64,
+/// }
+///
+/// // No implicit default for structs
+/// assert!(Point::or_default().is_none());
+/// ```
+///
+/// # Manual implementation
+///
+/// For types not covered by the derive, implement the trait directly.
+/// The `Ident` type must be one of the [`coded`](schema::coded) ident
+/// types (e.g. [`PrimitiveIdent`](schema::coded::PrimitiveIdent),
+/// [`Ident<N>`](schema::coded::Ident)).
+///
+/// ```ignore
+/// use typewire::{Typewire, schema};
+///
+/// struct MyId(u64);
+///
+/// impl Typewire for MyId {
+///   type Ident = schema::coded::PrimitiveIdent;
+///   const IDENT: Self::Ident =
+///     schema::coded::PrimitiveIdent::new(schema::Scalar::u64);
+///
+///   fn or_default() -> Option<Self> { None }
+///
+///   // On wasm32, also implement to_js/from_js/patch_js.
+/// }
+/// ```
 pub trait Typewire: Sized {
+  /// Compile-time type identity, embedded in link sections for schema extraction.
+  ///
+  /// For derived types this is [`coded::Ident<N>`](schema::coded::Ident) (the type
+  /// name). For primitives it is [`coded::PrimitiveIdent`](schema::coded::PrimitiveIdent).
+  /// For compound types it is a nested ident like
+  /// [`coded::OptionIdent`](schema::coded::OptionIdent) or
+  /// [`coded::SeqIdent`](schema::coded::SeqIdent).
   type Ident: Copy + 'static;
+
+  /// The identity constant for this type.
   const IDENT: Self::Ident;
 
   /// Returns the implicit default for this type when a field is absent.
   ///
   /// Most types return `None` (no default — the field is required).
-  /// `Option<T>` returns `Some(None)`, making optional fields implicitly
+  /// [`Option<T>`] returns `Some(None)`, making optional fields implicitly
   /// default to `None` without requiring `#[serde(default)]`.
+  ///
+  /// ```
+  /// use typewire::Typewire;
+  ///
+  /// // Option<T> implicitly defaults to None
+  /// assert_eq!(<Option<i32>>::or_default(), Some(None));
+  ///
+  /// // Most types require an explicit value
+  /// assert!(i32::or_default().is_none());
+  /// assert!(String::or_default().is_none());
+  /// assert!(<Vec<u8>>::or_default().is_none());
+  /// ```
   #[must_use]
   fn or_default() -> Option<Self> {
     None
   }
 
+  /// Converts this Rust value to a foreign-language value.
+  ///
+  /// On `wasm32`: converts to a [`JsValue`](wasm_bindgen::JsValue).
   #[cfg(target_arch = "wasm32")]
   fn to_js(&self) -> wasm_bindgen::JsValue;
 
-  /// Converts a JavaScript value into this Rust type.
+  /// Converts a foreign-language value into this Rust type.
+  ///
+  /// On `wasm32`: converts from a [`JsValue`](wasm_bindgen::JsValue).
   ///
   /// # Errors
   ///
-  /// Returns an [`Error`] if the JS value cannot be converted (e.g. wrong
-  /// type or out-of-range value).
+  /// Returns an [`Error`] if the value cannot be converted (e.g. wrong
+  /// type, out-of-range, or missing required fields).
   #[cfg(target_arch = "wasm32")]
   fn from_js(value: wasm_bindgen::JsValue) -> Result<Self, Error>;
 
-  /// Lenient variant of `from_js` used by `#[typewire(lenient)]` fields.
+  /// Lenient variant of [`from_js`](Typewire::from_js) for
+  /// `#[typewire(lenient)]` fields.
   ///
-  /// The default delegates to `from_js`. Collection types (`Vec`, `Option`,
-  /// maps) override this to skip invalid elements / default to `None`
-  /// instead of propagating errors, logging warnings for each skip.
+  /// The default delegates to [`from_js`](Typewire::from_js). Collection
+  /// types ([`Vec`], [`Option`], maps) override this to skip invalid
+  /// elements or default to `None` instead of propagating errors, logging
+  /// a warning for each skipped value.
   ///
   /// # Errors
   ///
-  /// Returns an [`Error`] if the JS value cannot be converted and the type
+  /// Returns an [`Error`] if the value cannot be converted and the type
   /// does not support lenient fallback.
   #[cfg(target_arch = "wasm32")]
   fn from_js_lenient(value: wasm_bindgen::JsValue, _field: &str) -> Result<Self, Error> {
     Self::from_js(value)
   }
 
-  /// Patches an existing JS value in place.
+  /// Patches an existing foreign-language value in place.
   ///
-  /// Compares `self` (the new value) against `old` (the existing JS value).
-  /// If they differ, calls `set` with the new JS representation.
+  /// Compares `self` (the new value) against `old` (the existing value).
+  /// If they differ, calls `set` with the new representation. Structs
+  /// recurse into fields, preserving object identity. Collections use
+  /// LCS-based diffing to emit minimal splice operations.
   ///
-  /// Structs override this to recurse into fields, preserving JS object
-  /// identity. There is no default — every type must either derive or
-  /// manually implement `patch_js`.
+  /// Every type must either derive or manually implement this method.
   #[cfg(target_arch = "wasm32")]
   fn patch_js(&self, old: &wasm_bindgen::JsValue, set: impl FnOnce(wasm_bindgen::JsValue));
 }
 
-/// Atomic `patch_js`: deserializes `old` via `from_js`, compares with
-/// `PartialEq`, and calls `set(new.to_js())` only if different.
+/// Atomic patching: round-trips `old` through [`from_js`](Typewire::from_js),
+/// compares with [`PartialEq`], and calls `set(new.to_js())` only if changed.
 ///
-/// Used by `#[diffable(atomic)]` types and by the derive for tuple structs,
-/// unit structs, and enums with only unit variants.
+/// Used by `#[diffable(atomic)]` types and by the derive for primitives,
+/// tuple structs, unit structs, and all-unit enums. Unlike structural
+/// patching (which recurses into fields), this replaces the entire value.
 #[cfg(target_arch = "wasm32")]
 pub fn patch_js_atomic<T: Typewire + PartialEq>(
   new: &T,
@@ -564,7 +796,10 @@ impl<T: Typewire> Typewire for Option<T> {
   }
 }
 
-/// Converts an iterator of `&T` references to a JS array via `Typewire::to_js`.
+/// Converts an iterator of `&T` references to a JS array via
+/// [`Typewire::to_js`].
+///
+/// Convenience wrapper around [`array`] for borrowed iterators.
 #[cfg(target_arch = "wasm32")]
 pub fn array_ref<'a, T: Typewire + 'a>(
   iter: impl IntoIterator<Item = &'a T>,

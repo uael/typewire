@@ -14,7 +14,7 @@ cargo xtask fmt                      # Format code (requires nightly rustfmt)
 cargo xtask fmt --check              # Check formatting
 cargo xtask lint                     # Clippy + format check (-D warnings)
 cargo xtask lint --fix               # Auto-fix clippy + formatting
-cargo doc --no-deps --all            # Build documentation (-D warnings in CI)
+cargo xtask doc                      # Build documentation (-D warnings in CI)
 cargo deny check                     # License/advisory/ban auditing
 ```
 
@@ -22,26 +22,28 @@ Requires **stable** Rust (pinned in `rust-toolchain`). Formatting uses nightly r
 
 ## Architecture
 
-typewire provides bidirectional Rust↔JavaScript type conversion for wasm32 targets, with compile-time schema embedding and TypeScript declaration generation.
+typewire is a derive-based cross-language type bridging framework. Define types once in Rust, get type-safe foreign-language bindings automatically. The derive macro generates platform-specific conversion methods, while the schema pipeline produces typed declarations for the target language.
+
+Currently supported targets: **WebAssembly** (wasm32) with TypeScript codegen. **Kotlin** and **Swift** are planned — adding a new target means implementing the internal `Codegen` trait in `typewire-derive` (see `src/expand.rs`) and a new emitter module in `typewire-schema`.
 
 ### Pipeline
 
 ```
-#[derive(Typewire)]  →  encode (link section)  →  decode  →  TypeScript .d.ts
+#[derive(Typewire)]  →  encode (link section)  →  decode  →  language-specific declarations
      (derive)              (typewire-schema)       (CLI)       (codegen)
 ```
 
-1. `#[derive(Typewire)]` analyzes types and emits `to_js`/`from_js`/`patch_js` + schema records in link sections (when `schemas` feature is enabled)
-2. The `typewire` CLI extracts schema records from compiled binaries, generates TypeScript declarations, and strips the schema section
-3. The generated `.d.ts` types match the wire format of the Rust types
+1. `#[derive(Typewire)]` analyzes types and emits platform-gated conversion methods + schema records in link sections (when `schemas` feature is enabled)
+2. The `typewire` CLI extracts schema records from compiled binaries, generates typed declarations, and strips the schema section
+3. The generated declarations match the wire format of the Rust types
 
 ### Workspace Crates
 
 | Crate | Role |
 |-------|------|
 | `typewire/` | Main library: `Typewire` trait, primitive/compound impls, error types, CLI binary |
-| `typewire-derive/` | Proc-macro: `#[derive(Typewire)]` with full serde/typewire attribute support |
-| `typewire-schema/` | Schema metadata: coded binary format, encode/decode, TypeScript emitter |
+| `typewire-derive/` | Proc-macro: `#[derive(Typewire)]` with platform-specific code generation |
+| `typewire-schema/` | Schema metadata: coded binary format, encode/decode, language emitters (TypeScript, more planned) |
 | `xtask/` | Dev automation: fmt, lint (9 clippy passes), test (unit/wasm/e2e) |
 | `examples/todo-app/` | End-to-end example: wasm cdylib with TypeScript type-checking |
 
@@ -84,6 +86,11 @@ Use [Conventional Commits](https://www.conventionalcommits.org/) — release-plz
 | `feat:` | minor | `feat: add new derive attribute` |
 | `feat!:` / `BREAKING CHANGE:` | major | `feat!: rename core trait` |
 | `docs:`, `ci:`, `chore:`, `refactor:`, `test:` | none | `ci: add deny check to CI` |
+
+## Documentation
+
+- **Never leak implementation details in public docs.** Public rustdoc (`///`, `//!`) must not mention crate-internal types, traits, modules, or functions that are not part of the public API (e.g. private traits, internal module paths, codegen helpers). If a concept is only relevant to contributors, document it in `CLAUDE.md` or code comments (`//`), not in rustdoc.
+- Use the README as the source of truth for what the project *is*. Crate-level docs should be consistent with it.
 
 ## Code Style
 

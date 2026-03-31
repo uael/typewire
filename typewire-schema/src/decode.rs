@@ -1,19 +1,8 @@
-//! Decodes [`coded`](crate::coded) binary records back into [`Schema`] values.
+//! Decodes binary schema records back into [`Schema`] values.
 //!
-//! This module reads the raw bytes of a `typewire_schemas` link section —
-//! a sequence of self-delimiting [`Record<T>`](crate::coded::Record) entries —
+//! This module reads the raw bytes of a `typewire_schemas` link section
 //! and reconstructs the type metadata as [`Schema`] values with owned data.
-//!
-//! This is the inverse of the derive-time encoding performed by the
-//! [`syn`](crate::syn) module:
-//!
-//! ```text
-//! #[derive(Typewire)]     syn::Schema ──encode──▶ coded::Record<T> (link section)
-//!                                                       │
-//!                                        decode::parse_section (this module)
-//!                                                       │
-//!                       codegen::Schema ◀──decode──      ▼
-//! ```
+//! It is the decode stage of the [typewire pipeline](https://docs.rs/typewire#pipeline).
 
 use crate::{
   Enum, EnumFlags, Field, FieldDefault, FieldFlags, Scalar, Schema, Struct, StructFlags,

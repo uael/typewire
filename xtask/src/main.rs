@@ -27,6 +27,8 @@ enum Command {
     #[arg(long)]
     fix: bool,
   },
+  /// Build documentation
+  Doc,
   /// Run tests
   Test {
     /// Which test suite to run (default: all)
@@ -52,6 +54,10 @@ static ROOT: LazyLock<PathBuf> = LazyLock::new(|| {
 
 const WASM_TARGET: &str = "wasm32-unknown-unknown";
 
+/// Optional type features for the `typewire` crate. Keep in sync with
+/// `typewire/Cargo.toml` `[package.metadata.docs.rs]`.
+const TYPE_FEATURES: &str = "uuid,fractional_index,chrono,url,indexmap,bytes,base64,serde_json";
+
 fn main() -> Result<()> {
   let cli = Cli::parse();
 
@@ -61,6 +67,7 @@ fn main() -> Result<()> {
   match cli.command {
     Command::Fmt { check } => fmt(&sh, check),
     Command::Lint { fix } => lint(&sh, fix),
+    Command::Doc => doc(&sh),
     Command::Test { suite } => match suite {
       Some(TestSuite::Unit) => test_unit(&sh),
       Some(TestSuite::Wasm) => test_wasm(&sh),
@@ -104,7 +111,7 @@ fn lint(sh: &Shell, fix: bool) -> Result<()> {
   cmd!(sh, "cargo clippy -p typewire --no-default-features {args...}").run_echo()?;
 
   // typewire: all optional type features.
-  let type_features = "uuid,fractional_index,chrono,url,indexmap,bytes,base64,serde_json";
+  let type_features = TYPE_FEATURES;
   cmd!(sh, "cargo clippy -p typewire --tests --features {type_features} {args...}").run_echo()?;
 
   // typewire: cli feature without derive (codegen/typescript path).
@@ -121,6 +128,19 @@ fn lint(sh: &Shell, fix: bool) -> Result<()> {
     .run_echo()?;
 
   fmt(sh, !fix)
+}
+
+// ---------------------------------------------------------------------------
+// Documentation
+// ---------------------------------------------------------------------------
+
+fn doc(sh: &Shell) -> Result<()> {
+  let type_features = TYPE_FEATURES;
+  let typewire_features = format!("derive,schemas,{type_features}");
+  cmd!(sh, "cargo doc --no-deps -p typewire --features {typewire_features}").run_echo()?;
+  cmd!(sh, "cargo doc --no-deps -p typewire-derive --all-features").run_echo()?;
+  cmd!(sh, "cargo doc --no-deps -p typewire-schema --features typescript").run_echo()?;
+  Ok(())
 }
 
 // ---------------------------------------------------------------------------

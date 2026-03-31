@@ -1,6 +1,6 @@
 # typewire-derive
 
-Proc-macro crate providing `#[derive(Typewire)]`.
+Proc-macro crate providing `#[derive(Typewire)]`. Platform-agnostic: the `Codegen` trait abstracts per-platform code generation (currently wasm32, with Kotlin and Swift planned).
 
 ## Key Files
 
@@ -10,7 +10,7 @@ Proc-macro crate providing `#[derive(Typewire)]`.
 | `src/attr.rs` | Attribute parsing: `ContainerAttrs`, `VariantAttrs`, `FieldAttrs` with sub-structs (`DiffableOpts`, `SkipOpts`, `EncodingOpts`) |
 | `src/case.rs` | `RenameAll` enum — identifier case conversion (camelCase, snake_case, etc.) |
 | `src/expand.rs` | `Codegen` trait + analysis: dispatches struct/enum/transparent/proxy to platform codegen |
-| `src/wasm.rs` | `WasmCodegen` — generates `to_js`, `from_js`, `patch_js` for wasm32 |
+| `src/wasm.rs` | `WasmCodegen` — first `Codegen` impl: generates `to_js`, `from_js`, `patch_js` for wasm32 |
 
 ## How It Works
 
@@ -22,7 +22,7 @@ Proc-macro crate providing `#[derive(Typewire)]`.
 
 | Feature | What it enables |
 |---------|----------------|
-| `schemas` | Emits link-section records for TypeScript codegen (opt-in, propagated from `typewire/schemas`) |
+| `schemas` | Emits link-section records for codegen (opt-in, propagated from `typewire/schemas`) |
 
 ## Attributes
 
