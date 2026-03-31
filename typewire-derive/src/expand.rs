@@ -30,6 +30,12 @@ pub trait Codegen {
   fn expand_enum(e: &SchemaEnum) -> Vec<TokenStream>;
   fn expand_into_proxy(p: &IntoProxy) -> Vec<TokenStream>;
   fn expand_from_proxy(p: &FromProxy) -> Vec<TokenStream>;
+
+  /// Additional `impl` blocks outside the main `impl Typewire` block
+  /// (e.g. ABI conversion traits for wasm targets).
+  fn abi_impls(_ident: &syn::Ident, _generics: &syn::Generics) -> TokenStream {
+    TokenStream::new()
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -70,12 +76,15 @@ pub fn expand<C: Codegen>(input: &DeriveInput) -> TokenStream {
   }
   let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
+  let abi_impls = C::abi_impls(ident, &generics);
+
   quote! {
     impl #impl_generics ::typewire::Typewire for #ident #ty_generics #where_clause {
       #(#gated)*
       #schema_items
     }
     #coded_section
+    #abi_impls
   }
 }
 

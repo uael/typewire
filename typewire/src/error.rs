@@ -32,3 +32,10 @@ impl Error {
     Self::Context { context: context.into(), source: Box::new(self) }
   }
 }
+
+#[cfg(target_arch = "wasm32")]
+impl From<Error> for wasm_bindgen::JsValue {
+  fn from(err: Error) -> Self {
+    js_sys::Error::new(&err.to_string()).into()
+  }
+}

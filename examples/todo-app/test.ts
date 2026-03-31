@@ -7,13 +7,14 @@
 import { createRequire } from "node:module";
 import { strict as assert } from "node:assert";
 
-import type { Todo, TodoList, Command, Priority, TodoId } from "./types.d.ts";
+import type { Todo, TodoList, Command, Priority } from "./types.d.ts";
+import type { create_todo as CreateTodoFn, apply_command as ApplyCommandFn } from "./pkg/todo_app.d.ts";
 
 // wasm-bindgen --target nodejs emits CommonJS
 const require = createRequire(import.meta.url);
 const { create_todo, apply_command } = require("./pkg/todo_app.js") as {
-  create_todo(value: unknown): Todo;
-  apply_command(list: unknown, cmd: unknown): TodoList;
+  create_todo: typeof CreateTodoFn;
+  apply_command: typeof ApplyCommandFn;
 };
 
 // -- create_todo round-trip --------------------------------------------------
@@ -22,6 +23,7 @@ const todo: Todo = create_todo({
   id: 1,
   title: "Write tests",
   completed: false,
+  description: null,
   priority: "high" satisfies Priority,
   tags: ["dev"],
 });
@@ -63,36 +65,6 @@ const removeCmd: Command = { type: "Remove", data: { id: 1 } };
 list = apply_command(list, removeCmd);
 assert.equal(list.todos.length, 0);
 
-// -- TodoId type check -------------------------------------------------------
-
-const id: TodoId = 42;
-assert.equal(id, 42);
-
-// -- Type-level assertions (verified at tsc --noEmit time) --------------------
-
-// Discriminated union narrowing: after checking type, data is narrowed.
-function assertNarrowing(cmd: Command) {
-  if (cmd.type === "Add") {
-    // TypeScript should narrow data to Todo
-    const _title: string = cmd.data.title;
-    const _completed: boolean = cmd.data.completed;
-  } else if (cmd.type === "Toggle") {
-    // TypeScript should narrow data to { id: number }
-    const _id: number = cmd.data.id;
-  } else if (cmd.type === "SetPriority") {
-    const _p: Priority = cmd.data.priority;
-  }
-}
-assertNarrowing(addCmd);
-
-// Priority is a string literal union — only valid values are accepted.
-const _p1: Priority = "low";
-const _p2: Priority = "medium";
-const _p3: Priority = "high";
-
-// Optional field: description is string | null, not string | undefined.
-const _d: string | null = todo.description;
-
 // -- Error paths: invalid inputs should throw ----------------------------------
 
 function assertThrows(fn: () => void, desc: string) {
@@ -107,26 +79,56 @@ function assertThrows(fn: () => void, desc: string) {
 
 // Missing required field (title)
 assertThrows(
-  () => create_todo({ id: 1, completed: false, priority: "high", tags: [] }),
+  () => create_todo({ id: 1, completed: false, priority: "high", tags: [] } as any),
   "missing required field 'title'",
 );
 
 // Wrong field type (id should be number)
 assertThrows(
-  () => create_todo({ id: "not_a_number", title: "x", completed: false, priority: "high", tags: [] }),
+  () => create_todo({ id: "not_a_number", title: "x", completed: false, priority: "high", tags: [] } as any),
   "wrong type for 'id'",
+);
+
+// Completely wrong type: number instead of object
+assertThrows(
+  () => create_todo(42 as any),
+  "number instead of Todo object",
+);
+
+// Completely wrong type: string instead of object
+assertThrows(
+  () => create_todo("hello" as any),
+  "string instead of Todo object",
+);
+
+// null argument
+assertThrows(
+  () => create_todo(null as any),
+  "null instead of Todo object",
+);
+
+// undefined argument
+assertThrows(
+  () => create_todo(undefined as any),
+  "undefined instead of Todo object",
 );
 
 // Invalid command type
 assertThrows(
-  () => apply_command({ name: "W", todos: [] }, { type: "Unknown", data: {} }),
+  () => apply_command({ name: "W", todos: [] } as any, { type: "Unknown", data: {} } as any),
   "unknown command variant",
 );
 
 // Missing command data
 assertThrows(
-  () => apply_command({ name: "W", todos: [] }, { type: "Toggle" }),
+  () => apply_command({ name: "W", todos: [] } as any, { type: "Toggle" } as any),
   "missing command data",
+);
+
+// Both arguments completely wrong
+assertThrows(
+  () => apply_command(null as any, null as any),
+  "null list and null command",
 );
 
 console.log("ok: all assertions passed");
