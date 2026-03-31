@@ -143,17 +143,10 @@ pub use typewire_schema as schema;
 // before parsing the records in `typewire_schemas`.
 #[cfg(feature = "schemas")]
 const _: () = {
-  #[cfg_attr(
-    target_vendor = "apple",
-    unsafe(link_section = "__DATA,typewire_version")
-  )]
-  #[cfg_attr(
-    not(target_vendor = "apple"),
-    unsafe(link_section = "typewire_version")
-  )]
+  #[cfg_attr(target_vendor = "apple", unsafe(link_section = "__DATA,typewire_version"))]
+  #[cfg_attr(not(target_vendor = "apple"), unsafe(link_section = "typewire_version"))]
   #[used]
-  static __TYPEWIRE_VERSION: schema::coded::SectionHeader =
-    schema::coded::SectionHeader::CURRENT;
+  static __TYPEWIRE_VERSION: schema::coded::SectionHeader = schema::coded::SectionHeader::CURRENT;
 };
 
 /// Base64-encode bytes to a string using the standard alphabet.
