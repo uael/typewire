@@ -405,7 +405,6 @@ fn struct_from_js_body(s: &SchemaStruct) -> TokenStream {
   match &s.shape {
     StructShape::Named(fields) => {
       let type_name = s.ident.to_string();
-      let destruct_fn = format_ident!("__tw_{type_name}_destruct");
 
       // deny_unknown_fields check via JS helper
       let deny_check = if s.flags.contains(StructFlags::DENY_UNKNOWN_FIELDS) {
@@ -421,12 +420,12 @@ fn struct_from_js_body(s: &SchemaStruct) -> TokenStream {
         quote! {}
       };
 
-      let field_bindings = named_fields_from_destruct_arr(fields);
+      let field_bindings =
+        named_fields_from_getters(fields, &format!("__tw_{type_name}"), &quote! { &value });
 
       let field_names: Vec<_> = fields.iter().map(|f| &f.ident).collect();
 
       quote! {
-        let __arr = #destruct_fn(&value);
         #deny_check
         #(#field_bindings)*
         Ok(#name { #(#field_names,)* })
@@ -469,29 +468,24 @@ fn struct_patch_js_fn(s: &SchemaStruct) -> TokenStream {
   match &s.shape {
     StructShape::Named(fields) => {
       let type_name = s.ident.to_string();
-      let destruct_fn = format_ident!("__tw_{type_name}_destruct");
 
       let active = active_fields(fields);
-      let mut arr_idx: u32 = 0;
       let field_patches: Vec<TokenStream> = active
         .iter()
         .map(|f| {
           let ident = &f.ident;
 
           if f.flags.contains(FieldFlags::FLATTEN) {
-            let idx = arr_idx;
-            arr_idx += 1;
             return quote! {
               ::typewire::Typewire::patch_js(
                 &self.#ident,
-                &__arr.get(#idx),
+                &::wasm_bindgen::JsValue::clone(old),
                 |_| {},
               );
             };
           }
 
-          let idx = arr_idx;
-          arr_idx += 1;
+          let getter_fn = format_ident!("__tw_{type_name}_get_{ident}");
           let ident_ts = quote! { &self.#ident };
           let to_js = field_to_js_expr(&ident_ts, f);
           let is_special =
@@ -501,7 +495,7 @@ fn struct_patch_js_fn(s: &SchemaStruct) -> TokenStream {
           if is_special {
             quote! {
               {
-                let __old_v = __arr.get(#idx);
+                let __old_v = #getter_fn(old);
                 let __new_v = #to_js;
                 if __old_v != __new_v {
                   #setter_fn(old, __new_v);
@@ -512,7 +506,7 @@ fn struct_patch_js_fn(s: &SchemaStruct) -> TokenStream {
             quote! {
               ::typewire::Typewire::patch_js(
                 #ident_ts,
-                &__arr.get(#idx),
+                &#getter_fn(old),
                 |v| #setter_fn(old, v),
               );
             }
@@ -526,7 +520,6 @@ fn struct_patch_js_fn(s: &SchemaStruct) -> TokenStream {
             _set(self.to_js());
             return;
           }
-          let __arr = #destruct_fn(old);
           #(#field_patches)*
         }
       }
@@ -746,19 +739,15 @@ fn ext_tagged_from_js(e: &SchemaEnum) -> TokenStream {
         }
         VariantKind::Named(fields) => {
           let content_fn = format_ident!("__tw_{type_name}_content_{vname}");
-          let field_bindings = named_fields_from_destruct_arr(fields);
+          let field_bindings = named_fields_from_getters(
+            fields,
+            &format!("__tw_{type_name}_{vname}"),
+            &quote! { &__content },
+          );
           let field_names: Vec<_> = fields.iter().map(|f| &f.ident).collect();
-          let has_active = fields.iter().any(|f| !f.flags.contains(FieldFlags::SKIP_DE));
-          let destruct_call = if has_active {
-            let destruct_fn = format_ident!("__tw_{type_name}_destruct_{vname}");
-            quote! { let __arr = #destruct_fn(&__content); }
-          } else {
-            quote! {}
-          };
           quote! {
             #idx => {
               let __content = #content_fn(&value);
-              #destruct_call
               #(#field_bindings)*
               return Ok(#name::#vname { #(#field_names,)* });
             }
@@ -890,7 +879,6 @@ fn ext_tagged_patch_js(e: &SchemaEnum) -> TokenStream {
             });
           }
           let content_fn = format_ident!("__tw_{type_name}_content_{vname}");
-          let destruct_fn = format_ident!("__tw_{type_name}_destruct_{vname}");
           let patches = variant_patch_fields(&active, &type_name, vname, &quote! { &__content });
 
           Some(quote! {
@@ -899,7 +887,6 @@ fn ext_tagged_patch_js(e: &SchemaEnum) -> TokenStream {
                 _set(self.to_js());
               } else {
                 let __content = #content_fn(old);
-                let __varr = #destruct_fn(&__content);
                 #(#patches)*
               }
             }
@@ -1109,18 +1096,14 @@ fn int_tagged_from_js(e: &SchemaEnum, tag: &str) -> TokenStream {
           #idx => return Ok(#name::#vname),
         }),
         VariantKind::Named(fields) => {
-          let field_bindings = named_fields_from_destruct_arr(fields);
+          let field_bindings = named_fields_from_getters(
+            fields,
+            &format!("__tw_{type_name}_{vname}"),
+            &quote! { &value },
+          );
           let field_names: Vec<_> = fields.iter().map(|f| &f.ident).collect();
-          let has_active = fields.iter().any(|f| !f.flags.contains(FieldFlags::SKIP_DE));
-          let destruct_call = if has_active {
-            let destruct_fn = format_ident!("__tw_{type_name}_destruct_{vname}");
-            quote! { let __arr = #destruct_fn(&value); }
-          } else {
-            quote! {}
-          };
           Some(quote! {
             #idx => {
-              #destruct_call
               #(#field_bindings)*
               return Ok(#name::#vname { #(#field_names,)* });
             }
@@ -1220,7 +1203,6 @@ fn int_tagged_patch_js(e: &SchemaEnum) -> TokenStream {
         }),
         VariantKind::Named(fields) => {
           let binds = field_binds(fields);
-          let destruct_fn = format_ident!("__tw_{type_name}_destruct_{vname}");
           let active = active_fields(fields);
           let patches = variant_patch_fields(&active, &type_name, vname, &quote! { old });
 
@@ -1229,7 +1211,6 @@ fn int_tagged_patch_js(e: &SchemaEnum) -> TokenStream {
               if #cmp {
                 _set(self.to_js());
               } else {
-                let __varr = #destruct_fn(old);
                 #(#patches)*
               }
             }
@@ -1389,21 +1370,23 @@ fn adj_tagged_from_js(e: &SchemaEnum, tag: &str) -> TokenStream {
           }
         }
         VariantKind::Named(fields) => {
-          let field_bindings = named_fields_from_destruct_arr(fields);
+          let field_bindings = named_fields_from_getters(
+            fields,
+            &format!("__tw_{type_name}_{vname}"),
+            &quote! { &__content },
+          );
           let field_names: Vec<_> = fields.iter().map(|f| &f.ident).collect();
-          let has_active = fields.iter().any(|f| !f.flags.contains(FieldFlags::SKIP_DE));
-          let destruct_call = if has_active {
-            let destruct_fn = format_ident!("__tw_{type_name}_destruct_{vname}");
-            quote! {
-              let __content = #content_fn(&value);
-              let __arr = #destruct_fn(&__content);
-            }
+          let has_active = fields.iter().any(|f| {
+            !(f.flags.contains(FieldFlags::SKIP_SER) && f.flags.contains(FieldFlags::SKIP_DE))
+          });
+          let content_decl = if has_active {
+            quote! { let __content = #content_fn(&value); }
           } else {
             quote! {}
           };
           quote! {
             #idx => {
-              #destruct_call
+              #content_decl
               #(#field_bindings)*
               Ok(#name::#vname { #(#field_names,)* })
             }
@@ -1490,7 +1473,6 @@ fn adj_tagged_patch_js(e: &SchemaEnum, content_key: &str) -> TokenStream {
         }),
         VariantKind::Named(fields) => {
           let binds = field_binds(fields);
-          let destruct_fn = format_ident!("__tw_{type_name}_destruct_{vname}");
           let active = active_fields(fields);
           let patches = variant_patch_fields(&active, &type_name, vname, &quote! { &__content });
 
@@ -1500,7 +1482,6 @@ fn adj_tagged_patch_js(e: &SchemaEnum, content_key: &str) -> TokenStream {
                 _set(self.to_js());
               } else {
                 let __content = #content_fn(old);
-                let __varr = #destruct_fn(&__content);
                 #(#patches)*
               }
             }
@@ -1660,20 +1641,14 @@ fn untagged_from_js(e: &SchemaEnum) -> TokenStream {
           }
         }
         VariantKind::Named(fields) => {
-          let destruct_fn = format_ident!("__tw_{type_name}_destruct_{vname}");
-          let field_bindings = named_fields_from_destruct_arr(fields);
+          let field_bindings = named_fields_from_getters(
+            fields,
+            &format!("__tw_{type_name}_{vname}"),
+            &quote! { &value },
+          );
           let field_names: Vec<_> = fields.iter().map(|f| &f.ident).collect();
-          let has_active = fields.iter().any(|f| {
-            !(f.flags.contains(FieldFlags::SKIP_SER) && f.flags.contains(FieldFlags::SKIP_DE))
-          });
-          let destruct_call = if has_active {
-            quote! { let __arr = #destruct_fn(&value); }
-          } else {
-            quote! {}
-          };
           quote! {
             if let Ok(v) = (|| -> ::core::result::Result<#name, ::typewire::Error> {
-              #destruct_call
               #(#field_bindings)*
               Ok(#name::#vname { #(#field_names,)* })
             })() {
@@ -1784,28 +1759,28 @@ fn active_fields(fields: &[SchemaField]) -> Vec<&SchemaField> {
 }
 
 /// Generate `patch_js` calls for active named fields of an enum variant.
-/// Fields are read from `__varr` (the destruct array); setter fns write to
-/// `setter_target`. The variant name is included in setter fn names.
+/// Getter fns read from `setter_target`; setter fns write to
+/// `setter_target`. The variant name is included in fn names.
 fn variant_patch_fields(
   active: &[&SchemaField],
   type_name: &str,
   vname: &Ident,
   setter_target: &TokenStream,
 ) -> Vec<TokenStream> {
-  let mut arr_idx: u32 = 0;
   active
     .iter()
     .map(|f| {
       let ident = &f.ident;
       if f.flags.contains(FieldFlags::FLATTEN) {
-        let idx = arr_idx;
-        arr_idx += 1;
         return quote! {
-          ::typewire::Typewire::patch_js(#ident, &__varr.get(#idx), |_| {});
+          ::typewire::Typewire::patch_js(
+            #ident,
+            &::wasm_bindgen::JsValue::clone(#setter_target),
+            |_| {},
+          );
         };
       }
-      let idx = arr_idx;
-      arr_idx += 1;
+      let getter_fn = format_ident!("__tw_{type_name}_{vname}_get_{ident}");
       let ident_ts = quote! { #ident };
       let to_js = field_to_js_expr(&ident_ts, f);
       let setter_fn = format_ident!("__tw_{type_name}_set_{vname}_{ident}");
@@ -1814,16 +1789,18 @@ fn variant_patch_fields(
       if is_special {
         quote! {
           {
-            let __old_v = __varr.get(#idx);
+            let __old_v = #getter_fn(#setter_target);
             let __new_v = #to_js;
-            if __old_v != __new_v { #setter_fn(#setter_target, __new_v); }
+            if __old_v != __new_v {
+              #setter_fn(#setter_target, __new_v);
+            }
           }
         }
       } else {
         quote! {
           ::typewire::Typewire::patch_js(
             #ident_ts,
-            &__varr.get(#idx),
+            &#getter_fn(#setter_target),
             |v| #setter_fn(#setter_target, v),
           );
         }
@@ -1832,44 +1809,46 @@ fn variant_patch_fields(
     .collect()
 }
 
-/// Generate `let field = ...;` bindings from a destruct array (`__arr`).
-/// Array indices map 1:1 to `active_fields`, with `SKIP_DE`/`FLATTEN`/default handling.
-fn named_fields_from_destruct_arr(fields: &[SchemaField]) -> Vec<TokenStream> {
-  let mut arr_idx: u32 = 0;
+/// Generate `let field = ...;` bindings by calling per-field getter
+/// functions. `getter_prefix` is e.g. `"__tw_Foo"` for structs or
+/// `"__tw_Foo_Bar"` for enum variant `Bar`. `source` is the expression
+/// passed to each getter (e.g. `&value`, `old`).
+fn named_fields_from_getters(
+  fields: &[SchemaField],
+  getter_prefix: &str,
+  source: &TokenStream,
+) -> Vec<TokenStream> {
   fields
     .iter()
     .map(|f| {
       let ident = &f.ident;
 
-      // Fully skipped fields (both SKIP_SER and SKIP_DE) are not in the
-      // destruct array -- just use their default.
+      // Fully skipped fields — just use their default.
       if f.flags.contains(FieldFlags::SKIP_SER) && f.flags.contains(FieldFlags::SKIP_DE) {
         let default_expr = default_expr_for_field(f);
         return quote! { let #ident = #default_expr; };
       }
 
-      // SKIP_DE fields are in the destruct array (for patch_js) but
-      // from_js ignores them and uses the default value.
+      // SKIP_DE fields have getters (for patch_js) but from_js uses the
+      // default value.
       if f.flags.contains(FieldFlags::SKIP_DE) {
-        arr_idx += 1; // consume the array slot
         let default_expr = default_expr_for_field(f);
         return quote! { let #ident = #default_expr; };
       }
 
-      // FLATTEN fields get the whole parent object from destruct.
+      // FLATTEN fields use the source object directly — no getter needed.
       if f.flags.contains(FieldFlags::FLATTEN) {
         let ty = &f.ty;
         let field_str = ident.to_string();
-        let idx = arr_idx;
-        arr_idx += 1;
         return quote! {
-          let #ident = <#ty as ::typewire::Typewire>::from_js(__arr.get(#idx))
+          let #ident = <#ty as ::typewire::Typewire>::from_js(
+            ::wasm_bindgen::JsValue::clone(#source),
+          )
             .map_err(|e| e.in_context(#field_str))?;
         };
       }
 
-      let idx = arr_idx;
-      arr_idx += 1;
+      let getter_fn = format_ident!("{getter_prefix}_get_{ident}");
       let from_js = field_from_js_expr(f);
       let js_key = &f.wire_name;
       let ty = &f.ty;
@@ -1879,7 +1858,7 @@ fn named_fields_from_destruct_arr(fields: &[SchemaField]) -> Vec<TokenStream> {
         let default_expr = default_expr_for_field(f);
         quote! {
           let #ident = {
-            let v = __arr.get(#idx);
+            let v = #getter_fn(#source);
             if !v.is_undefined() && !v.is_null() {
               #from_js
             } else {
@@ -1890,7 +1869,7 @@ fn named_fields_from_destruct_arr(fields: &[SchemaField]) -> Vec<TokenStream> {
       } else {
         quote! {
           let #ident = {
-            let v = __arr.get(#idx);
+            let v = #getter_fn(#source);
             if !v.is_undefined() {
               #from_js
             } else {
@@ -2182,8 +2161,8 @@ fn struct_js_bindings(s: &SchemaStruct) -> TokenStream {
   let mut js = String::new();
   let mut extern_fns: Vec<TokenStream> = Vec::new();
 
-  // -- destruct: returns array of active field values --
-  js_destruct(&mut js, &mut extern_fns, &type_name, &active);
+  // -- per-field getters (for from_js / patch_js) --
+  js_getters(&mut js, &mut extern_fns, &type_name, &active);
 
   // -- construct: params for non-SKIP_SER active fields --
   js_construct(&mut js, &mut extern_fns, &type_name, &active);
@@ -2222,15 +2201,15 @@ fn enum_js_bindings(e: &SchemaEnum) -> TokenStream {
     e.variants.iter().filter(|v| !v.flags.contains(VariantFlags::SKIP_SER)).collect();
 
   // Untagged enums don't need dispatch or content helpers, but still need
-  // per-variant construct and destruct for Named-field variants.
+  // per-variant construct and getters for Named-field variants.
   if matches!(e.tagging, Tagging::Untagged) {
     // -- per-variant construct (for to_js of Named variants) --
     js_enum_variant_constructs(&mut js, &mut extern_fns, &type_name, &ser_variants, &e.tagging);
 
-    // Deserializable variants with named fields need destruct helpers.
+    // Deserializable variants with named fields need getter helpers.
     let de_variants: Vec<&SchemaVariant> =
       e.variants.iter().filter(|v| !v.flags.contains(VariantFlags::SKIP_DE)).collect();
-    js_enum_variant_destructs(&mut js, &mut extern_fns, &type_name, &de_variants);
+    js_enum_variant_getters_and_setters(&mut js, &mut extern_fns, &type_name, &de_variants);
   } else {
     let tagged_variants = tagged_variants(e);
 
@@ -2243,8 +2222,8 @@ fn enum_js_bindings(e: &SchemaEnum) -> TokenStream {
     // -- per-variant construct (for to_js) --
     js_enum_variant_constructs(&mut js, &mut extern_fns, &type_name, &ser_variants, &e.tagging);
 
-    // -- per-variant destruct + setters (for from_js / patch_js of named variants) --
-    js_enum_variant_destructs(&mut js, &mut extern_fns, &type_name, &tagged_variants);
+    // -- per-variant getters + setters (for from_js / patch_js of named variants) --
+    js_enum_variant_getters_and_setters(&mut js, &mut extern_fns, &type_name, &tagged_variants);
   }
 
   if js.is_empty() {
@@ -2522,8 +2501,8 @@ fn js_enum_variant_constructs(
   }
 }
 
-/// Generate per-variant destruct + setter functions for named-field variants.
-fn js_enum_variant_destructs(
+/// Generate per-variant getter + setter functions for named-field variants.
+fn js_enum_variant_getters_and_setters(
   js: &mut String,
   extern_fns: &mut Vec<TokenStream>,
   type_name: &str,
@@ -2542,36 +2521,27 @@ fn js_enum_variant_destructs(
       continue;
     }
 
-    // Destruct
-    let destruct_name = format!("__tw_{type_name}_destruct_{vname}");
-    write!(js, "export function {destruct_name}(v){{return[").unwrap();
-    for (i, f) in active.iter().enumerate() {
-      if i > 0 {
-        js.push(',');
-      }
-      if f.flags.contains(FieldFlags::FLATTEN) {
-        js.push('v');
-      } else {
-        write!(js, "v[\"{}\"]", f.wire_name).unwrap();
-        for alias in &f.aliases {
-          write!(js, "??v[\"{alias}\"]").unwrap();
-        }
-      }
-    }
-    writeln!(js, "]}}").unwrap();
-    let destruct_ident = format_ident!("{destruct_name}");
-    extern_fns.push(quote! {
-      fn #destruct_ident(v: &::wasm_bindgen::JsValue) -> ::js_sys::Array;
-    });
-
-    // Per-field setters
     for f in &active {
       if f.flags.contains(FieldFlags::FLATTEN) {
         continue;
       }
       let field_ident = &f.ident;
+
+      // Per-field getter
+      let getter_name = format!("__tw_{type_name}_{vname}_get_{field_ident}");
+      write!(js, "export function {getter_name}(v){{return v.{}", f.wire_name).unwrap();
+      for alias in &f.aliases {
+        write!(js, "??v.{alias}").unwrap();
+      }
+      js.push_str("}\n");
+      let getter_ident = format_ident!("{getter_name}");
+      extern_fns.push(quote! {
+        fn #getter_ident(v: &::wasm_bindgen::JsValue) -> ::wasm_bindgen::JsValue;
+      });
+
+      // Per-field setter
       let setter_name = format!("__tw_{type_name}_set_{vname}_{field_ident}");
-      writeln!(js, "export function {setter_name}(o,v){{o[\"{}\"]=v}}", f.wire_name).unwrap();
+      writeln!(js, "export function {setter_name}(o,v){{o.{}=v}}", f.wire_name).unwrap();
       let setter_ident = format_ident!("{setter_name}");
       extern_fns.push(quote! {
         fn #setter_ident(o: &::wasm_bindgen::JsValue, v: ::wasm_bindgen::JsValue);
@@ -2584,35 +2554,33 @@ fn js_enum_variant_destructs(
 // JS source builders
 // ---------------------------------------------------------------------------
 
-/// `export function __tw_{name}_destruct(v){return[v["f1"],v["f2"]??v["alias"],v]}`
-fn js_destruct(
+/// Generate per-field getter functions:
+/// `export function __tw_{name}_get_{field}(v){return v.wire??v.alias}`
+///
+/// Flatten fields are skipped — callers use the source object directly.
+fn js_getters(
   js: &mut String,
   extern_fns: &mut Vec<TokenStream>,
   type_name: &str,
   active: &[&SchemaField],
 ) {
   use std::fmt::Write;
-  let fn_name = format!("__tw_{type_name}_destruct");
-  write!(js, "export function {fn_name}(v){{return[").unwrap();
-  for (i, f) in active.iter().enumerate() {
-    if i > 0 {
-      js.push(',');
-    }
+  for f in active {
     if f.flags.contains(FieldFlags::FLATTEN) {
-      js.push('v');
-    } else {
-      write!(js, "v[\"{}\"]", f.wire_name).unwrap();
-      for alias in &f.aliases {
-        write!(js, "??v[\"{alias}\"]").unwrap();
-      }
+      continue;
     }
+    let field_ident = &f.ident;
+    let fn_name = format!("__tw_{type_name}_get_{field_ident}");
+    write!(js, "export function {fn_name}(v){{return v.{}", f.wire_name).unwrap();
+    for alias in &f.aliases {
+      write!(js, "??v.{alias}").unwrap();
+    }
+    js.push_str("}\n");
+    let fn_ident = format_ident!("{fn_name}");
+    extern_fns.push(quote! {
+      fn #fn_ident(v: &::wasm_bindgen::JsValue) -> ::wasm_bindgen::JsValue;
+    });
   }
-  js.push_str("]}\n");
-
-  let fn_ident = format_ident!("{fn_name}");
-  extern_fns.push(quote! {
-    fn #fn_ident(v: &::wasm_bindgen::JsValue) -> ::js_sys::Array;
-  });
 }
 
 /// `export function __tw_{name}_construct(p0,p1,p2){const o={};o["f1"]=p0;...;return o}`
@@ -2668,7 +2636,7 @@ fn js_setters(
     }
     let field_ident = &f.ident;
     let fn_name = format!("__tw_{type_name}_set_{field_ident}");
-    writeln!(js, "export function {fn_name}(o,v){{o[\"{}\"]=v}}", f.wire_name).unwrap();
+    writeln!(js, "export function {fn_name}(o,v){{o.{}=v}}", f.wire_name).unwrap();
     let fn_ident = format_ident!("{fn_name}");
     extern_fns.push(quote! {
       fn #fn_ident(o: &::wasm_bindgen::JsValue, v: ::wasm_bindgen::JsValue);

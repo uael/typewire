@@ -57,6 +57,13 @@ examples/*/*.gen.d.ts
 !xtask/src/
 !xtask/**/*.rs
 
+# Experiments
+!experiments/
+!experiments/*/
+!experiments/**/*.wat
+!experiments/**/*.wasm
+!experiments/**/*.mjs
+
 # Claude
 !CLAUDE.md
 !.claude/
