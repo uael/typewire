@@ -1,6 +1,6 @@
 # xtask
 
-Dev automation. Single binary with subcommands for formatting, linting, documentation, and testing.
+Dev automation. Single binary with subcommands for formatting, linting, documentation, testing, and benchmarking.
 
 ## Commands
 
@@ -15,6 +15,11 @@ Dev automation. Single binary with subcommands for formatting, linting, document
 | `cargo xtask test unit` | Native tests + schema roundtrips (`--features typescript`) |
 | `cargo xtask test wasm` | wasm32 tests via `wasm-bindgen-test` |
 | `cargo xtask test e2e` | Build wasm → typegen (strips section) → snapshot diff → assert stripped → tsc → node |
+| `cargo xtask bench` | Run all benchmarks (size + perf) |
+| `cargo xtask bench size` | Bundle size comparison (raw/gzip) |
+| `cargo xtask bench perf` | Performance benchmarks (wasm, requires Node.js) |
+| `cargo xtask bench --json` | Machine-readable JSON output (used by CI) |
+| `cargo xtask bench check A.json B.json` | Compare two bench JSONs for size regressions (>1.5% = fail) |
 
 ## Lint Passes
 

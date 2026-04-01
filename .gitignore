@@ -51,6 +51,17 @@ examples/*/*.gen.d.ts
 !examples/*/src/
 !examples/**/*.rs
 
+# Rust (benches)
+!benches/
+!benches/*/
+!benches/README.md
+!benches/*/package.json
+!benches/*/Cargo.toml
+!benches/*/src/
+!benches/**/*.rs
+!benches/**/*.js
+!benches/*.svg
+
 # Rust (xtask)
 !xtask/
 !xtask/Cargo.toml

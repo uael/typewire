@@ -12,6 +12,10 @@ cargo xtask fmt --check              # Check formatting
 cargo xtask lint                     # Clippy + format check (-D warnings)
 cargo xtask lint --fix               # Auto-fix clippy + formatting
 cargo xtask doc                      # Build documentation (-D warnings in CI)
+cargo xtask bench                    # Run all benchmarks (size + perf)
+cargo xtask bench size               # Bundle size comparison only
+cargo xtask bench perf               # Performance benchmarks only
+cargo xtask bench check A.json B.json # Compare two bench JSONs for regressions
 cargo deny check                     # License/advisory/ban auditing
 ```
 
@@ -45,6 +49,7 @@ Currently supported targets: **WebAssembly** (wasm32) with TypeScript codegen. *
 | `typewire-schema/` | Schema metadata: coded binary format, encode/decode, language emitters (TypeScript, more planned) |
 | `xtask/` | Dev automation: fmt, lint (9 clippy passes), test (unit/wasm/e2e) |
 | `examples/todo-app/` | End-to-end example: wasm cdylib with TypeScript type-checking |
+| `benches/wasm/` | Unified wasm benchmarks: perf (typewire, serde-wasm-bindgen, serde_json) and bundle size (feature-gated per strategy) |
 
 ### Feature Matrix
 
@@ -102,6 +107,10 @@ Use [Conventional Commits](https://www.conventionalcommits.org/) — release-plz
 ## Workflow
 
 - When working on a PR, **always keep the PR description synced** with the current state of the changes. Update the title and body whenever the scope or content of the PR evolves.
+
+## Verification
+
+After making changes, run the commands that exercise the changed code. `cargo xtask test` does **not** build or run benchmarks — use `cargo xtask bench` for changes under `benches/`.
 
 ## Maintenance
 

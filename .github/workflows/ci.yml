@@ -39,8 +39,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-      - uses: cargo-bins/cargo-binstall@main
-      - run: cargo binstall --no-confirm wasm-bindgen-cli@0.2.115
+      - run: sudo apt-get install -y binaryen
       - uses: Swatinem/rust-cache@v2
       - run: cargo xtask test e2e
 
@@ -69,6 +68,70 @@ jobs:
       - run: cargo xtask doc
         env:
           RUSTDOCFLAGS: -D warnings
+
+  bench:
+    name: Bench
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - run: sudo apt-get install -y binaryen
+      - uses: Swatinem/rust-cache@v2
+      - name: Fetch bench notes
+        run: git fetch origin refs/notes/bench:refs/notes/bench 2>/dev/null || true
+      - name: Run benchmarks
+        run: cargo xtask bench --json > bench.json
+      - name: Print results
+        run: jq . bench.json
+      - name: Check for regression
+        shell: bash
+        run: |
+          # For PRs: compare against the tip of the target branch.
+          # For pushes to main: compare against the previous commit.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            PARENT="${{ github.event.pull_request.base.sha }}"
+          else
+            PARENT=$(git rev-parse HEAD~1 2>/dev/null || echo "")
+          fi
+          if [ -z "$PARENT" ]; then
+            echo "No parent commit, skipping regression check."
+            exit 0
+          fi
+
+          git notes --ref=bench show "$PARENT" > parent-bench.json 2>/dev/null || true
+          if [ ! -s parent-bench.json ]; then
+            echo "No bench notes for parent $PARENT, skipping regression check."
+            exit 0
+          fi
+
+          echo "Comparing against parent $PARENT"
+          cargo xtask bench check bench.json parent-bench.json
+      - name: Store bench notes
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Clear checkout's extraheader so our URL-embedded token takes effect
+          git config --local --unset-all http.https://github.com/.extraheader || true
+          git config --global --unset-all http.https://github.com/.extraheader || true
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+
+          git notes --ref=bench add -f -F bench.json HEAD
+          if ! git push origin refs/notes/bench; then
+            echo "::warning::First push failed, retrying after fetch"
+            git fetch origin refs/notes/bench:refs/notes/bench 2>/dev/null || true
+            git notes --ref=bench add -f -F bench.json HEAD
+            git push origin refs/notes/bench
+          fi
 
   deny:
     name: Cargo Deny

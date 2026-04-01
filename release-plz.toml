@@ -34,3 +34,10 @@ publish = false
 changelog_update = false
 git_tag_enable = false
 git_release_enable = false
+
+[[package]]
+name = "bench-wasm"
+publish = false
+changelog_update = false
+git_tag_enable = false
+git_release_enable = false
