@@ -51,6 +51,8 @@ pub struct Todo {
   pub created_at: Timestamp,
   /// Arbitrary key-value metadata (e.g. category, color).
   pub metadata: HashMap<String, String>,
+  /// Arbitrary extra data — exercises the `serde_json` feature.
+  pub extra: HashMap<String, serde_json::Value>,
 }
 
 /// A named list of todos.
@@ -241,7 +243,7 @@ const TS_IMPORTS: &str = r#"import type {
 } from '../types.d.ts';"#;
 
 // ===========================================================================
-// Exported wasm functions
+// Exported wasm functions — a realistic todo-app API
 // ===========================================================================
 
 /// Round-trip a JS object through the `Todo` type.
@@ -287,15 +289,10 @@ pub fn apply_command(
 }
 
 /// Describe a command for display.
-///
-/// # Errors
-///
-/// Returns an error if the command is not valid.
+#[expect(clippy::must_use_candidate, reason = "wasm_bindgen exports are called from JS")]
 #[wasm_bindgen]
-pub fn describe_command(
-  #[wasm_bindgen(unchecked_param_type = "Command")] cmd: Command,
-) -> Result<String, typewire::Error> {
-  let desc = match cmd {
+pub fn describe_command(#[wasm_bindgen(unchecked_param_type = "Command")] cmd: Command) -> String {
+  match cmd {
     Command::Add(todo) => format!("add: {}", todo.title),
     Command::Toggle { id } => format!("toggle: {id}"),
     Command::Remove { id } => format!("remove: {id}"),
@@ -308,8 +305,7 @@ pub fn describe_command(
       MessageContent::Reply { body, .. } => format!("reply: {body}"),
       MessageContent::System { text } => format!("system: {text}"),
     },
-  };
-  Ok(desc)
+  }
 }
 
 /// Round-trip a `ServerEvent`.
@@ -361,4 +357,50 @@ pub fn validate_non_empty(
   #[wasm_bindgen(unchecked_param_type = "NonEmptyString")] value: NonEmptyString,
 ) -> Result<String, typewire::Error> {
   Ok(String::from(value))
+}
+
+/// Look up a todo by id and return its title, or `"not found"`.
+#[expect(
+  clippy::needless_pass_by_value,
+  clippy::must_use_candidate,
+  reason = "wasm_bindgen exports require owned params and are called from JS"
+)]
+#[wasm_bindgen]
+pub fn get_todo_title(
+  #[wasm_bindgen(unchecked_param_type = "TodoList")] list: TodoList,
+  id: u32,
+) -> String {
+  list
+    .todos
+    .iter()
+    .find(|t| t.id == id)
+    .map_or_else(|| "not found".to_string(), |t| t.title.clone())
+}
+
+/// Return how many todos in the list are completed.
+#[expect(
+  clippy::needless_pass_by_value,
+  clippy::must_use_candidate,
+  reason = "wasm_bindgen exports require owned params and are called from JS"
+)]
+#[wasm_bindgen]
+pub fn count_completed(#[wasm_bindgen(unchecked_param_type = "TodoList")] list: TodoList) -> u32 {
+  u32::try_from(list.todos.iter().filter(|t| t.completed).count()).unwrap_or(u32::MAX)
+}
+
+/// Filter todos by priority and return the matching list.
+///
+/// # Errors
+///
+/// Returns an error if the inputs are not valid.
+#[expect(clippy::needless_pass_by_value, reason = "wasm_bindgen requires owned params")]
+#[wasm_bindgen(unchecked_return_type = "TodoList")]
+pub fn filter_by_priority(
+  #[wasm_bindgen(unchecked_param_type = "TodoList")] list: TodoList,
+  #[wasm_bindgen(unchecked_param_type = "Priority")] priority: Priority,
+) -> Result<TodoList, typewire::Error> {
+  Ok(TodoList {
+    name: list.name,
+    todos: list.todos.into_iter().filter(|t| t.priority == priority).collect(),
+  })
 }

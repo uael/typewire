@@ -21,7 +21,7 @@ End-to-end example and practical guide demonstrating the full typewire pipeline.
 | `test.ts` | TypeScript test importing generated types + runtime assertions |
 | `tsconfig.json` | TypeScript config for strict type-checking |
 | `package.json` | Dev deps: `typescript`, `tsx`, `@types/node` |
-| `README.md` | User-facing guide: quick start, attributes, type mapping, patterns |
+| `README.md` | User-facing guide: quick start, getting started, links to docs |
 
 ## Running
 
@@ -56,9 +56,12 @@ cd examples/todo-app && npm install && npx tsc --noEmit && npx tsx test.ts
 - `skip_serializing_if` on optional fields
 - `default` on container (`SendOptions`)
 - `base64` field encoding (`MessageContent::Image.data`)
-- `HashMap<K, V>` (`Todo.metadata`)
+- `HashMap<K, V>` (`Todo.metadata`, `Todo.extra`)
+- `serde_json::Value` via `HashMap<String, serde_json::Value>` (`Todo.extra`)
 - `Vec<T>` in many places
 - `Option<T>` throughout
 - Tuple struct (`Position`)
 - Proxy types with validation (`NonEmptyString` via `try_from` + `into`)
 - Error handling across wasm boundary (`Result<T, typewire::Error>`)
+- Direct return (non-Result) wasm exports (`describe_command`, `get_todo_title`, `count_completed`)
+- Richer API: `get_todo_title`, `count_completed`, `filter_by_priority`

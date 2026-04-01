@@ -941,6 +941,7 @@ name = "todo-app"
 version = "0.0.0"
 dependencies = [
  "js-sys",
+ "serde_json",
  "typewire",
  "wasm-bindgen",
 ]

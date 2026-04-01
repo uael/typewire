@@ -57,6 +57,7 @@ export interface Todo {
   tags: string[];
   createdAt: Timestamp;
   metadata: Record<string, string>;
+  extra: Record<string, any>;
 }
 
 export interface TodoList {

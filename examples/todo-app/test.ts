@@ -21,6 +21,9 @@ import type {
   create_read_receipt as CreateReadReceiptFn,
   create_response_meta as CreateResponseMetaFn,
   validate_non_empty as ValidateNonEmptyFn,
+  get_todo_title as GetTodoTitleFn,
+  count_completed as CountCompletedFn,
+  filter_by_priority as FilterByPriorityFn,
 } from "./pkg/todo_app.d.ts";
 
 // wasm-bindgen --target nodejs emits CommonJS
@@ -33,6 +36,9 @@ const {
   create_read_receipt,
   create_response_meta,
   validate_non_empty,
+  get_todo_title,
+  count_completed,
+  filter_by_priority,
 } = require("./pkg/todo_app.js") as {
   create_todo: typeof CreateTodoFn;
   apply_command: typeof ApplyCommandFn;
@@ -41,6 +47,9 @@ const {
   create_read_receipt: typeof CreateReadReceiptFn;
   create_response_meta: typeof CreateResponseMetaFn;
   validate_non_empty: typeof ValidateNonEmptyFn;
+  get_todo_title: typeof GetTodoTitleFn;
+  count_completed: typeof CountCompletedFn;
+  filter_by_priority: typeof FilterByPriorityFn;
 };
 
 // ---------------------------------------------------------------------------
@@ -74,6 +83,7 @@ const todo: Todo = create_todo({
   tags: ["dev"],
   createdAt: timestamp,
   metadata: { category: "work", color: "red" },
+  extra: { score: 42, labels: ["a", "b"] },
 });
 
 assert.equal(todo.id, 1);
@@ -85,6 +95,8 @@ assert.deepEqual(todo.tags, ["dev"]);
 assert.equal(todo.createdAt, timestamp);
 assert.equal(todo.metadata.category, "work");
 assert.equal(todo.metadata.color, "red");
+assert.equal(todo.extra.score, 42);
+assert.deepEqual(todo.extra.labels, ["a", "b"]);
 
 // ---------------------------------------------------------------------------
 // 2. apply_command: Add / Toggle / SetPriority / Remove
@@ -293,7 +305,55 @@ assertThrows(
 );
 
 // ---------------------------------------------------------------------------
-// 9. Error handling — invalid inputs should throw
+// 9. Rich API — get_todo_title, count_completed, filter_by_priority
+// ---------------------------------------------------------------------------
+
+const todoA: Todo = create_todo({
+  id: 10,
+  title: "Alpha",
+  completed: true,
+  description: null,
+  priority: "high",
+  tags: [],
+  createdAt: timestamp,
+  metadata: {},
+  extra: {},
+});
+
+const todoB: Todo = create_todo({
+  id: 20,
+  title: "Beta",
+  completed: false,
+  description: "some desc",
+  priority: "low",
+  tags: ["test"],
+  createdAt: timestamp,
+  metadata: {},
+  extra: {},
+});
+
+const richList: TodoList = apply_command(
+  apply_command(
+    { name: "Mixed", todos: [] },
+    { type: "Add", data: todoA },
+  ),
+  { type: "Add", data: todoB },
+);
+
+assert.equal(get_todo_title(richList, 10), "Alpha");
+assert.equal(get_todo_title(richList, 999), "not found");
+assert.equal(count_completed(richList), 1);
+
+const highOnly = filter_by_priority(richList, "high");
+assert.equal(highOnly.todos.length, 1);
+assert.equal(highOnly.todos[0].title, "Alpha");
+
+const lowOnly = filter_by_priority(richList, "low");
+assert.equal(lowOnly.todos.length, 1);
+assert.equal(lowOnly.todos[0].title, "Beta");
+
+// ---------------------------------------------------------------------------
+// 10. Error handling — invalid inputs should throw
 // ---------------------------------------------------------------------------
 
 // Missing required field (title)
