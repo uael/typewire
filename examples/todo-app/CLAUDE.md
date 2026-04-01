@@ -1,15 +1,15 @@
 # todo-app
 
-End-to-end example demonstrating the full typewire pipeline.
+End-to-end example and practical guide demonstrating the full typewire pipeline. Designed as a comprehensive showcase of Typewire's API surface while remaining a readable, coherent app.
 
 ## Pipeline
 
 ```
-#[derive(Typewire)] types  →  cargo build --target wasm32  →  typewire CLI  →  types.d.ts
-                                                                                    ↓
-                                                                              tsc --noEmit
-                                                                                    ↓
-                                                                           npx tsx test.ts
+#[derive(Typewire)] types  ->  cargo build --target wasm32  ->  typewire CLI  ->  types.d.ts
+                                                                                      |
+                                                                                tsc --noEmit
+                                                                                      |
+                                                                             npx tsx test.ts
 ```
 
 ## Files
@@ -21,6 +21,12 @@ End-to-end example demonstrating the full typewire pipeline.
 | `test.ts` | TypeScript test importing generated types + runtime assertions |
 | `tsconfig.json` | TypeScript config for strict type-checking |
 | `package.json` | Dev deps: `typescript`, `tsx`, `@types/node` |
+| `README.md` | User-facing guide: quick start, getting started, links to docs |
+| `web/index.html` | HTML shell for the React/MobX UI |
+| `web/main.tsx` | React entry point with MobX configuration |
+| `web/App.tsx` | React components: `App` and `TodoItem` (observer) |
+| `web/store.ts` | MobX store backed by wasm state + `patch_js` |
+| `web/vite.config.ts` | Vite config for the web UI |
 
 ## Running
 
@@ -45,8 +51,24 @@ cd examples/todo-app && npm install && npx tsc --noEmit && npx tsx test.ts
 
 ## What It Tests
 
-- Struct with `rename_all`, optional fields, nested types
-- Enum with adjacent tagging (`tag = "type"`, `content = "data"`)
-- Transparent newtype
-- TypeScript type-checking catches mismatches between generated types and test usage
-- Node.js runtime verifies `create_todo` and `apply_command` round-trip correctly
+- Transparent newtypes (`UserId`, `MessageId`, `Timestamp`)
+- Externally tagged all-unit enum (`Priority`)
+- Internally tagged enum with `rename_all_fields` (`MessageContent`)
+- Adjacently tagged enum (`Command`, `ServerEvent`, `ReactionEvent`)
+- Untagged enum (`ReadReceipt`)
+- `rename_all = "camelCase"` on structs and enums
+- `rename` on individual fields (`ResponseMeta.success` -> `ok`)
+- `skip_serializing_if` on optional fields
+- `default` on container (`SendOptions`)
+- `base64` field encoding (`MessageContent::Image.data`)
+- `HashMap<K, V>` (`Todo.metadata`, `Todo.extra`)
+- `serde_json::Value` via `HashMap<String, serde_json::Value>` (`Todo.extra`)
+- `Vec<T>` in many places
+- `Option<T>` throughout
+- Tuple struct (`Position`)
+- Proxy types with validation (`NonEmptyString` via `try_from` + `into`)
+- Error handling across wasm boundary (`Result<T, typewire::Error>`)
+- Direct return (non-Result) wasm exports (`describe_command`, `get_todo_title`, `count_completed`)
+- Richer API: `get_todo_title`, `count_completed`, `filter_by_priority`
+- Stateful dispatch/view pattern: `init`, `dispatch`, `view` with `patch_js`
+- React/MobX web UI in `web/` directory (run with `npm run dev`)

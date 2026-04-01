@@ -50,6 +50,10 @@ examples/*/*.gen.d.ts
 !examples/*/package.json
 !examples/*/src/
 !examples/**/*.rs
+!examples/*/web/
+!examples/*/web/*.ts
+!examples/*/web/*.tsx
+!examples/*/web/*.html
 
 # Rust (xtask)
 !xtask/
@@ -63,6 +67,10 @@ examples/*/*.gen.d.ts
 !experiments/**/*.wat
 !experiments/**/*.wasm
 !experiments/**/*.mjs
+
+# Documentation
+!docs/
+!docs/**/*.md
 
 # Claude
 !CLAUDE.md

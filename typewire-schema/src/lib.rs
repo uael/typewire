@@ -526,8 +526,8 @@ pub struct IntoProxy {
   pub ident: repr::Ident,
   /// Generic type parameters.
   pub generics: repr::Generics,
-  /// The proxy type path (the `X` in `into = "X"`).
-  pub into_ty: repr::Path,
+  /// The proxy type reference (the `X` in `into = "X"`).
+  pub into_ty: repr::Ty,
   /// How deserialization is resolved. Only available at derive-time —
   /// the binary format does not encode this.
   #[cfg(feature = "encode")]
@@ -546,8 +546,8 @@ pub struct FromProxy {
   pub ident: repr::Ident,
   /// Generic type parameters.
   pub generics: repr::Generics,
-  /// The proxy type path.
-  pub proxy: repr::Path,
+  /// The proxy type reference.
+  pub proxy: repr::Ty,
   /// `true` for `try_from`, `false` for `from`.
   pub is_try: bool,
   /// The type's own struct/enum shape, used for serialization and patching.

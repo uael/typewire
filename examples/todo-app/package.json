@@ -1,9 +1,23 @@
 {
   "private": true,
   "type": "module",
+  "scripts": {
+    "dev": "vite --config web/vite.config.ts",
+    "build": "vite build --config web/vite.config.ts"
+  },
   "devDependencies": {
     "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^4",
     "typescript": "^5",
-    "tsx": "^4"
+    "tsx": "^4",
+    "vite": "^6"
+  },
+  "dependencies": {
+    "mobx": "^6",
+    "mobx-react-lite": "^4",
+    "react": "^19",
+    "react-dom": "^19"
   }
 }

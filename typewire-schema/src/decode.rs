@@ -36,8 +36,6 @@ pub enum Error {
   InvalidUtf8 { offset: usize },
   #[error("truncated record at offset {offset}: declared {declared} bytes, {remaining} remaining")]
   TruncatedRecord { offset: usize, declared: usize, remaining: usize },
-  #[error("expected named type identifier, got compound type reference")]
-  ExpectedNamedType,
 }
 
 // ---------------------------------------------------------------------------
@@ -218,7 +216,11 @@ fn parse_struct(r: &mut Reader<'_>) -> Result<Schema, Error> {
   let flags = StructFlags::from_bits_retain(r.read_u8()?);
   let raw = r.read_u8()?;
   let shape_tag = StructShapeTag::from_u8(raw).ok_or(Error::InvalidStructShape(raw))?;
-  let _generic_count = r.read_u32_le()?;
+  // The binary format encodes a generic-parameter count but not the names.
+  // Generic types currently skip the link section entirely (see encode.rs),
+  // so this is always 0 in practice. Stored as a placeholder for forward
+  // compatibility.
+  let generic_count = r.read_u32_le()? as usize;
   let field_count = r.read_count()?;
 
   let shape = match shape_tag {
@@ -239,7 +241,8 @@ fn parse_struct(r: &mut Reader<'_>) -> Result<Schema, Error> {
     StructShapeTag::Unit => StructShape::Unit,
   };
 
-  Ok(Schema::Struct(Struct { ident, generics: Vec::new(), flags, shape }))
+  let generics = (0..generic_count).map(|i| format!("T{i}")).collect();
+  Ok(Schema::Struct(Struct { ident, generics, flags, shape }))
 }
 
 fn parse_transparent(r: &mut Reader<'_>) -> Result<Schema, Error> {
@@ -262,7 +265,7 @@ fn parse_enum(r: &mut Reader<'_>) -> Result<Schema, Error> {
   let tagging_kind = TaggingKind::from_u8(raw).ok_or(Error::InvalidTaggingKind(raw))?;
   let tag_key = r.read_ident_str()?;
   let content_key = r.read_ident_str()?;
-  let _generic_count = r.read_u32_le()?;
+  let generic_count = r.read_u32_le()? as usize;
   let variant_count = r.read_count()?;
 
   let tagging = match tagging_kind {
@@ -277,31 +280,25 @@ fn parse_enum(r: &mut Reader<'_>) -> Result<Schema, Error> {
     variants.push(parse_flat_variant(r)?);
   }
 
-  Ok(Schema::Enum(Enum { ident, generics: Vec::new(), flags, tagging, variants }))
+  let generics = (0..generic_count).map(|i| format!("T{i}")).collect();
+  Ok(Schema::Enum(Enum { ident, generics, flags, tagging, variants }))
 }
 
 fn parse_into_proxy(r: &mut Reader<'_>) -> Result<Schema, Error> {
   let ident = r.read_ident_str()?;
-  let _generic_count = r.read_u32_le()?;
+  let generic_count = r.read_u32_le()? as usize;
   let into_ty = r.read_type_ident()?;
-  Ok(Schema::IntoProxy(crate::IntoProxy {
-    ident,
-    generics: Vec::new(),
-    into_ty: into_ty.ident().ok_or(Error::ExpectedNamedType)?.to_string(),
-  }))
+  let generics = (0..generic_count).map(|i| format!("T{i}")).collect();
+  Ok(Schema::IntoProxy(crate::IntoProxy { ident, generics, into_ty: into_ty.into() }))
 }
 
 fn parse_from_proxy(r: &mut Reader<'_>) -> Result<Schema, Error> {
   let ident = r.read_ident_str()?;
-  let _generic_count = r.read_u32_le()?;
+  let generic_count = r.read_u32_le()? as usize;
   let proxy = r.read_type_ident()?;
   let is_try = r.read_u8()? != 0;
-  Ok(Schema::FromProxy(crate::FromProxy {
-    ident,
-    generics: Vec::new(),
-    proxy: proxy.ident().ok_or(Error::ExpectedNamedType)?.to_string(),
-    is_try,
-  }))
+  let generics = (0..generic_count).map(|i| format!("T{i}")).collect();
+  Ok(Schema::FromProxy(crate::FromProxy { ident, generics, proxy: proxy.into(), is_try }))
 }
 
 fn parse_flat_field(r: &mut Reader<'_>) -> Result<Field, Error> {

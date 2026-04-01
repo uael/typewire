@@ -44,7 +44,7 @@ Currently supported targets: **WebAssembly** (wasm32) with TypeScript codegen. *
 | `typewire-derive/` | Proc-macro: `#[derive(Typewire)]` with platform-specific code generation |
 | `typewire-schema/` | Schema metadata: coded binary format, encode/decode, language emitters (TypeScript, more planned) |
 | `xtask/` | Dev automation: fmt, lint (9 clippy passes), test (unit/wasm/e2e) |
-| `examples/todo-app/` | End-to-end example: wasm cdylib with TypeScript type-checking |
+| `examples/todo-app/` | End-to-end example and user guide: comprehensive showcase of all derive features |
 
 ### Feature Matrix
 
