@@ -325,7 +325,7 @@ fn test_with_coverage(
       )
       .read()?;
       let wasm_summary = parse_llvm_cov_json(&wasm, krate)?;
-      summary = merge_coverage(summary, wasm_summary);
+      summary = merge_coverage(summary, &wasm_summary);
     }
 
     results.push(summary);
@@ -370,9 +370,13 @@ fn parse_llvm_cov_json(json_str: &str, crate_name: &str) -> Result<CrateCoverage
 /// The same source file may be compiled under both targets with different
 /// `#[cfg]` gates, producing disjoint sets of coverable lines. We sum the
 /// line counts and recompute the percentage.
-fn merge_coverage(a: CrateCoverage, b: CrateCoverage) -> CrateCoverage {
+fn merge_coverage(a: CrateCoverage, b: &CrateCoverage) -> CrateCoverage {
   let covered = a.covered + b.covered;
   let total = a.total + b.total;
+  #[expect(
+    clippy::cast_precision_loss,
+    reason = "line counts are small enough that f64 precision is fine"
+  )]
   let percent = if total > 0 { covered as f64 / total as f64 * 100.0 } else { 0.0 };
   CrateCoverage { name: a.name, covered, total, percent }
 }
