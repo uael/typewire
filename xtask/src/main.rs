@@ -1,8 +1,20 @@
 use std::{path::PathBuf, sync::LazyLock};
 
 use anyhow::{Result, bail};
+use bitflags::bitflags;
 use clap::{Parser, Subcommand, ValueEnum};
 use xshell::{Shell, cmd};
+
+bitflags! {
+  /// Which test suites to instrument for code coverage.
+  #[derive(Clone, Copy, Debug)]
+  struct CoverageMode: u8 {
+    /// Native unit + integration tests.
+    const UNIT = 0b01;
+    /// wasm32 tests via `wasm-bindgen-test` (nightly).
+    const WASM = 0b10;
+  }
+}
 
 #[derive(Parser)]
 #[command(name = "xtask", about = "Typewire project automation")]
@@ -86,14 +98,14 @@ fn main() -> Result<()> {
     Command::Test { suite, coverage, coverage_output } => match suite {
       Some(TestSuite::Unit) => {
         if coverage {
-          test_with_coverage(&sh, true, false, coverage_output.as_deref())
+          test_with_coverage(&sh, CoverageMode::UNIT, coverage_output.as_deref())
         } else {
           test_unit(&sh)
         }
       }
       Some(TestSuite::Wasm) => {
         if coverage {
-          test_with_coverage(&sh, false, true, coverage_output.as_deref())
+          test_with_coverage(&sh, CoverageMode::WASM, coverage_output.as_deref())
         } else {
           test_wasm(&sh)
         }
@@ -112,7 +124,8 @@ fn main() -> Result<()> {
           // Combined coverage runs unit + wasm under instrumentation.
           // E2e is skipped because it doesn't support coverage and is
           // already validated by the main CI workflow.
-          test_with_coverage(&sh, true, true, coverage_output.as_deref())
+          let mode = CoverageMode::UNIT | CoverageMode::WASM;
+          test_with_coverage(&sh, mode, coverage_output.as_deref())
         } else {
           test_unit(&sh)?;
           test_wasm(&sh)?;
@@ -270,24 +283,24 @@ const WASM_COV_RUSTFLAGS: &str = "-Cinstrument-coverage -Zno-profiler-runtime \
 
 /// Run tests under `cargo-llvm-cov` and produce per-crate coverage reports.
 ///
-/// When `unit` is set, native workspace tests and the `typewire-schema`
-/// typescript-feature tests are included. When `wasm` is set, wasm32 tests
-/// are run under nightly with `wasm-bindgen-test`'s experimental coverage.
+/// `mode` selects which suites to instrument: `CoverageMode::UNIT` adds native
+/// workspace tests (including the `typewire-schema` typescript-feature pass),
+/// and `CoverageMode::WASM` adds wasm32 tests under nightly with
+/// `wasm-bindgen-test`'s experimental coverage.
 fn test_with_coverage(
   sh: &Shell,
-  unit: bool,
-  wasm: bool,
+  mode: CoverageMode,
   output_path: Option<&std::path::Path>,
 ) -> Result<()> {
   cmd!(sh, "cargo llvm-cov clean --workspace").run_echo()?;
 
-  if unit {
+  if mode.contains(CoverageMode::UNIT) {
     cmd!(sh, "cargo llvm-cov --no-report --all").run_echo()?;
     // typewire-schema typescript feature tests (mutually exclusive with encode).
     cmd!(sh, "cargo llvm-cov --no-report -p typewire-schema --features typescript").run_echo()?;
   }
 
-  if wasm {
+  if mode.contains(CoverageMode::WASM) {
     let wasm_rustflags = WASM_COV_RUSTFLAGS;
     cmd!(sh, "cargo +nightly llvm-cov --no-report -p typewire --target {WASM_TARGET}")
       .env("CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER", "wasm-bindgen-test-runner")
@@ -419,6 +432,14 @@ fn get_parent_coverage(sh: &Shell) -> Option<std::collections::HashMap<String, f
     .ok()
     .filter(|s| !s.is_empty())?;
 
+  parse_coverage_note(&note)
+}
+
+/// Parse a coverage note body into a map of crate name to percentage.
+///
+/// Each line has the format `crate-name: 85.2%`. Blank lines are
+/// skipped. Returns `None` when no valid entries are found.
+fn parse_coverage_note(note: &str) -> Option<std::collections::HashMap<String, f64>> {
   let mut result = std::collections::HashMap::new();
   for line in note.lines() {
     let line = line.trim();
@@ -432,4 +453,266 @@ fn get_parent_coverage(sh: &Shell) -> Option<std::collections::HashMap<String, f
   }
 
   if result.is_empty() { None } else { Some(result) }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  // -----------------------------------------------------------------------
+  // parse_coverage_note
+  // -----------------------------------------------------------------------
+
+  #[test]
+  fn parse_coverage_note_typical() {
+    let note = "typewire: 85.2%\ntypewire-derive: 72.1%\ntypewire-schema: 90.3%\n";
+    let map = parse_coverage_note(note).unwrap();
+    assert_eq!(map.len(), 3);
+    assert!((map["typewire"] - 85.2).abs() < f64::EPSILON);
+    assert!((map["typewire-derive"] - 72.1).abs() < f64::EPSILON);
+    assert!((map["typewire-schema"] - 90.3).abs() < f64::EPSILON);
+  }
+
+  #[test]
+  fn parse_coverage_note_blank_lines() {
+    let note = "\n  typewire: 50.0%  \n\n  typewire-derive: 60.0%  \n\n";
+    let map = parse_coverage_note(note).unwrap();
+    assert_eq!(map.len(), 2);
+    assert!((map["typewire"] - 50.0).abs() < f64::EPSILON);
+    assert!((map["typewire-derive"] - 60.0).abs() < f64::EPSILON);
+  }
+
+  #[test]
+  fn parse_coverage_note_empty() {
+    assert!(parse_coverage_note("").is_none());
+    assert!(parse_coverage_note("  \n  \n").is_none());
+  }
+
+  #[test]
+  fn parse_coverage_note_malformed_returns_none() {
+    // No colon separator.
+    assert!(parse_coverage_note("typewire 85.2%").is_none());
+    // Missing percent sign.
+    assert!(parse_coverage_note("typewire: 85.2").is_none());
+  }
+
+  // -----------------------------------------------------------------------
+  // parse_llvm_cov_json
+  // -----------------------------------------------------------------------
+
+  #[test]
+  fn parse_llvm_cov_json_extracts_lines() {
+    let json = r#"{
+      "data": [{
+        "totals": {
+          "lines": { "count": 200, "covered": 170, "percent": 85.0 }
+        }
+      }]
+    }"#;
+    let cov = parse_llvm_cov_json(json, "my-crate").unwrap();
+    assert_eq!(cov.name, "my-crate");
+    assert_eq!(cov.total, 200);
+    assert_eq!(cov.covered, 170);
+    assert!((cov.percent - 85.0).abs() < f64::EPSILON);
+  }
+
+  #[test]
+  fn parse_llvm_cov_json_missing_fields_defaults_to_zero() {
+    let json = r#"{"data": [{"totals": {"lines": {}}}]}"#;
+    let cov = parse_llvm_cov_json(json, "empty").unwrap();
+    assert_eq!(cov.total, 0);
+    assert_eq!(cov.covered, 0);
+    assert!((cov.percent - 0.0).abs() < f64::EPSILON);
+  }
+
+  // -----------------------------------------------------------------------
+  // coverage_delta (using temp git repos)
+  // -----------------------------------------------------------------------
+
+  /// Create a temporary git repo with initial and child commits, attaching
+  /// a coverage note to the initial commit. Returns `(Shell, temp_dir)`.
+  fn setup_git_repo_with_note(note_body: &str) -> (Shell, tempfile::TempDir) {
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let mut sh = Shell::new().expect("shell");
+    sh.set_current_dir(tmp.path());
+
+    // Initialise repo with a commit.
+    xshell::cmd!(sh, "git init").run().expect("git init");
+    xshell::cmd!(sh, "git config user.email test@test.com").run().unwrap();
+    xshell::cmd!(sh, "git config user.name Test").run().unwrap();
+    std::fs::write(tmp.path().join("file.txt"), "a").unwrap();
+    xshell::cmd!(sh, "git add .").run().unwrap();
+    xshell::cmd!(sh, "git commit -m initial").run().unwrap();
+
+    // Attach a coverage note to the initial commit.
+    xshell::cmd!(sh, "git notes --ref=coverage add -m {note_body} HEAD").run().unwrap();
+
+    // Create a child commit (simulating a PR).
+    std::fs::write(tmp.path().join("file.txt"), "b").unwrap();
+    xshell::cmd!(sh, "git add .").run().unwrap();
+    xshell::cmd!(sh, "git commit -m child").run().unwrap();
+
+    (sh, tmp)
+  }
+
+  #[test]
+  fn coverage_delta_passes_when_no_regression() {
+    let note = "typewire: 80.0%\ntypewire-derive: 70.0%\ntypewire-schema: 90.0%";
+    let (sh, tmp) = setup_git_repo_with_note(note);
+
+    // Write a "current" coverage JSON that's equal or better.
+    let current = serde_json::to_string(&vec![
+      CrateCoverage { name: "typewire".into(), covered: 82, total: 100, percent: 82.0 },
+      CrateCoverage { name: "typewire-derive".into(), covered: 70, total: 100, percent: 70.0 },
+      CrateCoverage { name: "typewire-schema".into(), covered: 91, total: 100, percent: 91.0 },
+    ])
+    .unwrap();
+    let json_path = tmp.path().join("coverage.json");
+    std::fs::write(&json_path, current).unwrap();
+
+    // Should succeed -- no regression.
+    coverage_delta(&sh, &json_path).expect("should pass with no regression");
+  }
+
+  #[test]
+  fn coverage_delta_fails_on_large_regression() {
+    let note = "typewire: 80.0%\ntypewire-derive: 70.0%\ntypewire-schema: 90.0%";
+    let (sh, tmp) = setup_git_repo_with_note(note);
+
+    // Write a "current" coverage JSON with >1% regression in typewire.
+    let current = serde_json::to_string(&vec![
+      CrateCoverage { name: "typewire".into(), covered: 78, total: 100, percent: 78.0 },
+      CrateCoverage { name: "typewire-derive".into(), covered: 70, total: 100, percent: 70.0 },
+      CrateCoverage { name: "typewire-schema".into(), covered: 91, total: 100, percent: 91.0 },
+    ])
+    .unwrap();
+    let json_path = tmp.path().join("coverage.json");
+    std::fs::write(&json_path, current).unwrap();
+
+    // Should fail -- typewire regressed by 2%.
+    let result = coverage_delta(&sh, &json_path);
+    assert!(result.is_err(), "should fail with >1% regression");
+    let msg = result.unwrap_err().to_string();
+    assert!(msg.contains("regression"), "error message should mention regression, got: {msg}");
+  }
+
+  #[test]
+  fn coverage_delta_allows_small_regression() {
+    let note = "typewire: 80.0%\ntypewire-derive: 70.0%\ntypewire-schema: 90.0%";
+    let (sh, tmp) = setup_git_repo_with_note(note);
+
+    // Write a "current" coverage JSON with exactly 1% regression (within threshold).
+    let current = serde_json::to_string(&vec![
+      CrateCoverage { name: "typewire".into(), covered: 79, total: 100, percent: 79.0 },
+      CrateCoverage { name: "typewire-derive".into(), covered: 70, total: 100, percent: 70.0 },
+      CrateCoverage { name: "typewire-schema".into(), covered: 90, total: 100, percent: 90.0 },
+    ])
+    .unwrap();
+    let json_path = tmp.path().join("coverage.json");
+    std::fs::write(&json_path, current).unwrap();
+
+    // Should pass -- exactly 1.0% regression is the threshold (>1.0 fails).
+    coverage_delta(&sh, &json_path).expect("should pass with exactly 1% regression");
+  }
+
+  #[test]
+  fn coverage_delta_skips_when_no_parent_note() {
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let mut sh = Shell::new().expect("shell");
+    sh.set_current_dir(tmp.path());
+
+    // Initialise repo with two commits but no coverage note.
+    xshell::cmd!(sh, "git init").run().expect("git init");
+    xshell::cmd!(sh, "git config user.email test@test.com").run().unwrap();
+    xshell::cmd!(sh, "git config user.name Test").run().unwrap();
+    std::fs::write(tmp.path().join("file.txt"), "a").unwrap();
+    xshell::cmd!(sh, "git add .").run().unwrap();
+    xshell::cmd!(sh, "git commit -m initial").run().unwrap();
+    std::fs::write(tmp.path().join("file.txt"), "b").unwrap();
+    xshell::cmd!(sh, "git add .").run().unwrap();
+    xshell::cmd!(sh, "git commit -m child").run().unwrap();
+
+    let current = serde_json::to_string(&vec![CrateCoverage {
+      name: "typewire".into(),
+      covered: 80,
+      total: 100,
+      percent: 80.0,
+    }])
+    .unwrap();
+    let json_path = tmp.path().join("coverage.json");
+    std::fs::write(&json_path, current).unwrap();
+
+    // Should pass gracefully -- no parent note exists.
+    coverage_delta(&sh, &json_path).expect("should skip delta check when no parent note");
+  }
+
+  #[test]
+  fn coverage_delta_handles_new_crate() {
+    let note = "typewire: 80.0%";
+    let (sh, tmp) = setup_git_repo_with_note(note);
+
+    // Current report includes a crate that wasn't in the parent note.
+    let current = serde_json::to_string(&vec![
+      CrateCoverage { name: "typewire".into(), covered: 80, total: 100, percent: 80.0 },
+      CrateCoverage { name: "typewire-new".into(), covered: 50, total: 100, percent: 50.0 },
+    ])
+    .unwrap();
+    let json_path = tmp.path().join("coverage.json");
+    std::fs::write(&json_path, current).unwrap();
+
+    // Should pass -- new crates don't have a baseline to regress against.
+    coverage_delta(&sh, &json_path).expect("should pass with a new crate");
+  }
+
+  // -----------------------------------------------------------------------
+  // get_parent_coverage (git notes round-trip in a temp repo)
+  // -----------------------------------------------------------------------
+
+  #[test]
+  fn get_parent_coverage_reads_note_from_parent() {
+    let note = "typewire: 85.2%\ntypewire-derive: 72.1%";
+    let (sh, _tmp) = setup_git_repo_with_note(note);
+
+    let map = get_parent_coverage(&sh).expect("should read parent note");
+    assert_eq!(map.len(), 2);
+    assert!((map["typewire"] - 85.2).abs() < f64::EPSILON);
+    assert!((map["typewire-derive"] - 72.1).abs() < f64::EPSILON);
+  }
+
+  #[test]
+  fn get_parent_coverage_returns_none_without_note() {
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let mut sh = Shell::new().expect("shell");
+    sh.set_current_dir(tmp.path());
+
+    xshell::cmd!(sh, "git init").run().expect("git init");
+    xshell::cmd!(sh, "git config user.email test@test.com").run().unwrap();
+    xshell::cmd!(sh, "git config user.name Test").run().unwrap();
+    std::fs::write(tmp.path().join("file.txt"), "a").unwrap();
+    xshell::cmd!(sh, "git add .").run().unwrap();
+    xshell::cmd!(sh, "git commit -m initial").run().unwrap();
+    std::fs::write(tmp.path().join("file.txt"), "b").unwrap();
+    xshell::cmd!(sh, "git add .").run().unwrap();
+    xshell::cmd!(sh, "git commit -m child").run().unwrap();
+
+    assert!(get_parent_coverage(&sh).is_none());
+  }
+
+  // -----------------------------------------------------------------------
+  // CoverageMode bitflags
+  // -----------------------------------------------------------------------
+
+  #[test]
+  fn coverage_mode_flags() {
+    let unit = CoverageMode::UNIT;
+    let wasm = CoverageMode::WASM;
+    let both = CoverageMode::UNIT | CoverageMode::WASM;
+
+    assert!(unit.contains(CoverageMode::UNIT));
+    assert!(!unit.contains(CoverageMode::WASM));
+    assert!(both.contains(CoverageMode::UNIT));
+    assert!(both.contains(CoverageMode::WASM));
+    assert!(!wasm.contains(CoverageMode::UNIT));
+    assert!(wasm.contains(CoverageMode::WASM));
+  }
 }
