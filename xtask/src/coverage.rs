@@ -327,9 +327,16 @@ fn parse_coverage_note(note: &str) -> Option<HashMap<String, f64>> {
       continue;
     }
     // Format: "crate-name: 85.2%"
-    let (name, pct) = line.split_once(':')?;
-    let pct = pct.trim().strip_suffix('%')?.trim();
-    result.insert(name.trim().to_string(), pct.parse::<f64>().ok()?);
+    let Some((name, pct)) = line.split_once(':') else {
+      continue;
+    };
+    let Some(pct) = pct.trim().strip_suffix('%') else {
+      continue;
+    };
+    let Ok(value) = pct.trim().parse::<f64>() else {
+      continue;
+    };
+    result.insert(name.trim().to_string(), value);
   }
 
   if result.is_empty() { None } else { Some(result) }

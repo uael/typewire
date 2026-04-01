@@ -7,7 +7,7 @@ Dev automation. Single binary with subcommands for formatting, linting, document
 | File | Purpose |
 |------|---------|
 | `src/main.rs` | CLI entry point, fmt/lint/doc/test commands |
-| `src/coverage.rs` | Coverage collection, file-level merging, delta enforcement, git notes |
+| `src/coverage.rs` | Coverage collection, per-line LCOV merging, delta enforcement, git notes |
 
 ## Commands
 
@@ -60,11 +60,11 @@ Uses `wasm-bindgen-test`'s experimental coverage support (requires nightly >= 1.
 
 ### Cross-target merging
 
-The `typewire` crate compiles different code for native vs wasm32 (`#[cfg(target_arch = "wasm32")]`). Coverage reports are collected per-target and merged at the file level: files appearing in both reports have their line counts summed (they represent disjoint cfg-gated regions), files in only one report are taken as-is.
+The `typewire` crate compiles different code for native vs wasm32 (`#[cfg(target_arch = "wasm32")]`). LCOV reports (`cargo llvm-cov report --lcov`) are collected per-target and merged at the per-line level: for each source file, `DA:line,count` records are combined, taking the max execution count when the same line appears in both targets (covered if *either* target covered it). Lines present in only one report are taken as-is. Totals are recomputed from the merged per-line map.
 
 ### Reporting
 
-`cargo llvm-cov report --json --package <crate>` generates per-crate JSON reports (with per-file details) from all accumulated profdata.
+`cargo llvm-cov report --lcov --package <crate>` generates per-crate LCOV reports from all accumulated profdata. These are parsed into per-line coverage data internally.
 
 Output:
 - Human-readable summary printed to stdout
