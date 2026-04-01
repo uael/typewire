@@ -18,21 +18,27 @@ const WASM_COV_RUSTFLAGS: &str = "-Cinstrument-coverage -Zno-profiler-runtime \
 const MAX_REGRESSION: f64 = 1.0;
 
 // ---------------------------------------------------------------------------
-// Per-file coverage data
+// Per-line coverage data
 // ---------------------------------------------------------------------------
 
-/// Line coverage for a single source file.
-#[derive(Clone, Debug)]
-struct FileCoverage {
-  covered: u64,
-  total: u64,
-}
+/// Per-line execution counts for a single source file.
+///
+/// Maps line number to execution count. A line with count 0 is coverable
+/// but not covered; a line absent from the map is not coverable.
+type LineCoverage = BTreeMap<u32, u64>;
+
+/// Per-file, per-line coverage data for a crate.
+///
+/// Maps filename to per-line execution counts. Used for cross-target
+/// merging so that overlapping lines (same file compiled under both
+/// native and wasm32) are correctly de-duplicated.
+type FileLineCoverage = BTreeMap<String, LineCoverage>;
 
 /// Per-crate coverage result.
 ///
-/// The `files` map holds per-file line counts used for cross-target merging
-/// but is excluded from the serialized JSON (only the aggregate numbers are
-/// written to the coverage output).
+/// The `files` map holds per-file per-line data used for cross-target
+/// merging but is excluded from the serialized JSON (only the aggregate
+/// numbers are written to the coverage output).
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct CrateCoverage {
   name: String,
@@ -40,7 +46,7 @@ pub struct CrateCoverage {
   total: u64,
   percent: f64,
   #[serde(skip)]
-  files: BTreeMap<String, FileCoverage>,
+  files: FileLineCoverage,
 }
 
 // ---------------------------------------------------------------------------
@@ -78,16 +84,16 @@ pub fn test_with_coverage(
   //
   // The `typewire` crate compiles different code for native vs wasm32
   // (most impls are behind `#[cfg(target_arch = "wasm32")]`), so we
-  // must collect reports for both targets and merge at the file level.
+  // must collect LCOV reports for both targets and merge per-line.
   let mut results = Vec::new();
   for &krate in COVERAGE_CRATES {
-    let native = cmd!(sh, "cargo llvm-cov report --json --package {krate}").read()?;
-    let mut summary = parse_llvm_cov_json(&native, krate)?;
+    let native_lcov = cmd!(sh, "cargo llvm-cov report --lcov --package {krate}").read()?;
+    let mut summary = parse_lcov(&native_lcov, krate);
 
     if mode.contains(CoverageMode::WASM) && krate == "typewire" {
-      let wasm =
-        cmd!(sh, "cargo llvm-cov report --json --package {krate} --target {WASM_TARGET}").read()?;
-      let wasm_summary = parse_llvm_cov_json(&wasm, krate)?;
+      let wasm_lcov =
+        cmd!(sh, "cargo llvm-cov report --lcov --package {krate} --target {WASM_TARGET}").read()?;
+      let wasm_summary = parse_lcov(&wasm_lcov, krate);
       summary = merge_coverage(summary, &wasm_summary);
     }
 
@@ -166,30 +172,52 @@ pub fn coverage_delta(sh: &Shell, coverage_json: &std::path::Path) -> Result<()>
 }
 
 // ---------------------------------------------------------------------------
-// JSON parsing
+// LCOV parsing
 // ---------------------------------------------------------------------------
 
-/// Parse the JSON output from `cargo llvm-cov report --json` and extract
-/// per-file line coverage for a given crate.
-fn parse_llvm_cov_json(json_str: &str, crate_name: &str) -> Result<CrateCoverage> {
-  let v: serde_json::Value = serde_json::from_str(json_str)?;
+/// Parse LCOV output into per-file, per-line coverage data.
+///
+/// LCOV format:
+/// ```text
+/// SF:/path/to/file.rs
+/// DA:10,1
+/// DA:11,0
+/// DA:12,5
+/// end_of_record
+/// ```
+///
+/// Where `DA:line_number,execution_count`. Lines with count > 0 are
+/// covered; lines with count == 0 are coverable but uncovered.
+fn parse_lcov(lcov: &str, crate_name: &str) -> CrateCoverage {
+  let mut files: FileLineCoverage = BTreeMap::new();
+  let mut current_file: Option<String> = None;
 
-  let mut files = BTreeMap::new();
-  if let Some(file_array) = v["data"][0]["files"].as_array() {
-    for file in file_array {
-      if let Some(filename) = file["filename"].as_str() {
-        let lines = &file["summary"]["lines"];
-        let total = lines["count"].as_u64().unwrap_or(0);
-        let covered = lines["covered"].as_u64().unwrap_or(0);
-        files.insert(filename.to_string(), FileCoverage { covered, total });
-      }
+  for line in lcov.lines() {
+    let line = line.trim();
+    if let Some(path) = line.strip_prefix("SF:") {
+      current_file = Some(path.to_string());
+    } else if line == "end_of_record" {
+      current_file = None;
+    } else if let Some(da) = line.strip_prefix("DA:")
+      && let Some(ref file) = current_file
+      && let Some((line_no, count)) = parse_da(da)
+    {
+      files.entry(file.clone()).or_default().insert(line_no, count);
     }
   }
 
-  let (covered, total) = aggregate(&files);
+  let (covered, total) = aggregate_lines(&files);
   let percent = compute_percent(covered, total);
 
-  Ok(CrateCoverage { name: crate_name.to_string(), covered, total, percent, files })
+  CrateCoverage { name: crate_name.to_string(), covered, total, percent, files }
+}
+
+/// Parse a `DA:line,count` record.
+fn parse_da(da: &str) -> Option<(u32, u64)> {
+  let (line_str, count_str) = da.split_once(',')?;
+  let line_no = line_str.parse::<u32>().ok()?;
+  let count = count_str.parse::<u64>().ok()?;
+  Some((line_no, count))
 }
 
 // ---------------------------------------------------------------------------
@@ -198,23 +226,25 @@ fn parse_llvm_cov_json(json_str: &str, crate_name: &str) -> Result<CrateCoverage
 
 /// Merge coverage from two targets (native + wasm) for the same crate.
 ///
-/// Files that appear in both reports have their line counts summed (they
-/// represent disjoint `#[cfg]`-gated regions within the same source file).
-/// Files that appear in only one report are taken as-is.
+/// For each source file, per-line execution counts are merged: when the
+/// same line appears in both reports, the maximum count is taken (the
+/// line is covered if *either* target covered it). Lines present in only
+/// one report are taken as-is. This correctly handles `#[cfg]`-gated
+/// code where different lines are active under different targets.
 fn merge_coverage(a: CrateCoverage, b: &CrateCoverage) -> CrateCoverage {
   let mut merged = a.files;
 
-  for (filename, b_file) in &b.files {
-    merged
-      .entry(filename.clone())
-      .and_modify(|a_file| {
-        a_file.covered += b_file.covered;
-        a_file.total += b_file.total;
-      })
-      .or_insert_with(|| b_file.clone());
+  for (filename, b_lines) in &b.files {
+    let entry = merged.entry(filename.clone()).or_default();
+    for (&line_no, &b_count) in b_lines {
+      entry
+        .entry(line_no)
+        .and_modify(|a_count| *a_count = (*a_count).max(b_count))
+        .or_insert(b_count);
+    }
   }
 
-  let (covered, total) = aggregate(&merged);
+  let (covered, total) = aggregate_lines(&merged);
   let percent = compute_percent(covered, total);
 
   CrateCoverage { name: a.name, covered, total, percent, files: merged }
@@ -224,9 +254,22 @@ fn merge_coverage(a: CrateCoverage, b: &CrateCoverage) -> CrateCoverage {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Sum covered/total across all files.
-fn aggregate(files: &BTreeMap<String, FileCoverage>) -> (u64, u64) {
-  files.values().fold((0, 0), |(c, t), f| (c + f.covered, t + f.total))
+/// Count covered and total lines across all files.
+///
+/// A line is "total" if it appears in any file's line map (i.e. it is
+/// coverable). A line is "covered" if its execution count is > 0.
+fn aggregate_lines(files: &FileLineCoverage) -> (u64, u64) {
+  let mut covered = 0u64;
+  let mut total = 0u64;
+  for lines in files.values() {
+    for &count in lines.values() {
+      total += 1;
+      if count > 0 {
+        covered += 1;
+      }
+    }
+  }
+  (covered, total)
 }
 
 /// Compute coverage percentage from covered/total line counts.
