@@ -15,8 +15,9 @@ Dev automation. Single binary with subcommands for formatting, linting, document
 | `cargo xtask test unit` | Native tests + schema roundtrips (`--features typescript`) |
 | `cargo xtask test wasm` | wasm32 tests via `wasm-bindgen-test` |
 | `cargo xtask test e2e` | Build wasm → typegen (strips section) → snapshot diff → assert stripped → tsc → node |
-| `cargo xtask test --coverage` | All tests + per-crate line coverage via `cargo-llvm-cov` |
+| `cargo xtask test --coverage` | Unit + wasm coverage via `cargo-llvm-cov` (skips e2e) |
 | `cargo xtask test unit --coverage` | Unit tests only with coverage |
+| `cargo xtask test wasm --coverage` | Wasm tests only with coverage (nightly) |
 | `cargo xtask test --coverage --coverage-output path.json` | Write per-crate coverage JSON to a custom path |
 
 ## Lint Passes
@@ -35,12 +36,23 @@ The lint command runs separate clippy invocations because `typewire-schema`'s `e
 
 ## Coverage
 
-The `--coverage` flag uses `cargo-llvm-cov` (LLVM instrument-coverage) to collect line coverage for native unit tests. Wasm and e2e tests are excluded because LLVM instrument-coverage does not support the wasm32 target.
+The `--coverage` flag uses `cargo-llvm-cov` (LLVM instrument-coverage) to collect line coverage. When run without a suite selector (`cargo xtask test --coverage`), both native unit tests and wasm tests are instrumented and combined into a single per-crate report. E2e tests are skipped in coverage mode (they are validated by the main CI workflow).
 
-Coverage is collected via a two-pass approach:
+### Native coverage
+
 1. `cargo llvm-cov --no-report --all` runs workspace tests under coverage instrumentation
 2. `cargo llvm-cov --no-report -p typewire-schema --features typescript` runs the typescript-feature tests separately (mutually exclusive features)
-3. `cargo llvm-cov report --json --package <crate>` generates per-crate JSON reports
+
+### Wasm coverage
+
+Uses `wasm-bindgen-test`'s experimental coverage support (requires nightly >= 1.87.0 and wasm-bindgen-test >= 0.3.57):
+1. `cargo +nightly llvm-cov --no-report -p typewire --target wasm32-unknown-unknown` with env vars:
+   - `CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner`
+   - `CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Cinstrument-coverage -Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage"`
+
+### Reporting
+
+3. `cargo llvm-cov report --json --package <crate>` generates per-crate JSON reports from all accumulated profdata
 
 Output:
 - Human-readable summary printed to stdout

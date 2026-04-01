@@ -34,7 +34,7 @@ enum Command {
     /// Which test suite to run (default: all)
     #[arg(value_enum)]
     suite: Option<TestSuite>,
-    /// Collect code coverage via cargo-llvm-cov (unit tests only)
+    /// Collect code coverage via cargo-llvm-cov (unit + wasm)
     #[arg(long)]
     coverage: bool,
     /// Write per-crate coverage JSON to this path
@@ -87,12 +87,10 @@ fn main() -> Result<()> {
       }
       Some(TestSuite::Wasm) => {
         if coverage {
-          bail!(
-            "--coverage is not supported for wasm tests (LLVM instrument-coverage \
-                 does not target wasm32)"
-          );
+          test_wasm_with_coverage(&sh, coverage_output.as_deref())
+        } else {
+          test_wasm(&sh)
         }
-        test_wasm(&sh)
       }
       Some(TestSuite::E2e) => {
         if coverage {
@@ -105,12 +103,15 @@ fn main() -> Result<()> {
       }
       None => {
         if coverage {
-          test_unit_with_coverage(&sh, coverage_output.as_deref())?;
+          // Combined coverage runs unit + wasm under instrumentation.
+          // E2e is skipped because it doesn't support coverage and is
+          // already validated by the main CI workflow.
+          test_all_with_coverage(&sh, coverage_output.as_deref())
         } else {
           test_unit(&sh)?;
+          test_wasm(&sh)?;
+          test_e2e(&mut sh)
         }
-        test_wasm(&sh)?;
-        test_e2e(&mut sh)
       }
     },
   }
@@ -256,8 +257,8 @@ struct CrateCoverage {
 
 /// Run unit tests under cargo-llvm-cov and produce per-crate coverage reports.
 ///
-/// Coverage uses LLVM instrument-coverage which only supports native targets,
-/// so wasm and e2e tests are excluded.
+/// Coverage uses LLVM instrument-coverage. Only native unit tests are included;
+/// use `test_all_with_coverage` to combine with wasm coverage.
 fn test_unit_with_coverage(sh: &Shell, output_path: Option<&std::path::Path>) -> Result<()> {
   // Clean previous coverage data to avoid stale profiles.
   cmd!(sh, "cargo llvm-cov clean --workspace").run_echo()?;
@@ -269,7 +270,57 @@ fn test_unit_with_coverage(sh: &Shell, output_path: Option<&std::path::Path>) ->
   // (separate invocation for the mutually exclusive feature).
   cmd!(sh, "cargo llvm-cov --no-report -p typewire-schema --features typescript").run_echo()?;
 
-  // Collect per-crate coverage by generating a JSON report for each crate.
+  collect_and_report_coverage(sh, output_path)
+}
+
+/// Wasm-specific RUSTFLAGS for coverage instrumentation via `wasm-bindgen-test`.
+///
+/// Requires nightly >= 1.87.0 and wasm-bindgen-test >= 0.3.57.
+const WASM_COV_RUSTFLAGS: &str = "-Cinstrument-coverage -Zno-profiler-runtime \
+  -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage";
+
+/// Run wasm tests under cargo-llvm-cov (nightly only) and produce per-crate
+/// coverage reports.
+fn test_wasm_with_coverage(sh: &Shell, output_path: Option<&std::path::Path>) -> Result<()> {
+  cmd!(sh, "cargo llvm-cov clean --workspace").run_echo()?;
+
+  run_wasm_coverage_pass(sh)?;
+
+  collect_and_report_coverage(sh, output_path)
+}
+
+/// Run all tests (unit + wasm) under cargo-llvm-cov and produce combined
+/// per-crate coverage reports.
+fn test_all_with_coverage(sh: &Shell, output_path: Option<&std::path::Path>) -> Result<()> {
+  cmd!(sh, "cargo llvm-cov clean --workspace").run_echo()?;
+
+  // Native unit tests.
+  cmd!(sh, "cargo llvm-cov --no-report --all").run_echo()?;
+  cmd!(sh, "cargo llvm-cov --no-report -p typewire-schema --features typescript").run_echo()?;
+
+  // Wasm tests (nightly).
+  run_wasm_coverage_pass(sh)?;
+
+  collect_and_report_coverage(sh, output_path)
+}
+
+/// Execute wasm tests under coverage instrumentation.
+///
+/// Uses nightly Rust with `wasm-bindgen-test`'s experimental coverage
+/// support. The profraw data is collected into the same llvm-cov workspace
+/// so it can be merged with native coverage.
+fn run_wasm_coverage_pass(sh: &Shell) -> Result<()> {
+  let wasm_rustflags = WASM_COV_RUSTFLAGS;
+  cmd!(sh, "cargo +nightly llvm-cov --no-report -p typewire --target {WASM_TARGET}")
+    .env("CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER", "wasm-bindgen-test-runner")
+    .env("CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS", wasm_rustflags)
+    .run_echo()?;
+  Ok(())
+}
+
+/// Collect per-crate JSON coverage from accumulated profdata and print a
+/// human-readable summary.
+fn collect_and_report_coverage(sh: &Shell, output_path: Option<&std::path::Path>) -> Result<()> {
   let mut results = Vec::new();
   for &krate in COVERAGE_CRATES {
     let json_str =
@@ -278,7 +329,6 @@ fn test_unit_with_coverage(sh: &Shell, output_path: Option<&std::path::Path>) ->
     results.push(summary);
   }
 
-  // Print human-readable summary.
   println!();
   println!("=== Coverage Summary ===");
   for r in &results {
@@ -286,7 +336,6 @@ fn test_unit_with_coverage(sh: &Shell, output_path: Option<&std::path::Path>) ->
   }
   println!();
 
-  // Write machine-readable JSON output.
   let json_output = serde_json::to_string_pretty(&results)?;
   if let Some(path) = output_path {
     std::fs::write(path, &json_output)?;

@@ -22,14 +22,23 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: llvm-tools-preview
+          targets: wasm32-unknown-unknown
+
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: llvm-tools-preview
+          targets: wasm32-unknown-unknown
+
+      - uses: cargo-bins/cargo-binstall@main
+      - run: cargo binstall --no-confirm wasm-bindgen-cli@0.2.115
 
       - uses: Swatinem/rust-cache@v2
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
-      - name: Run tests with coverage
-        run: cargo xtask test unit --coverage --coverage-output target/coverage.json
+      - name: Run unit + wasm tests with coverage
+        run: cargo xtask test --coverage --coverage-output target/coverage.json
 
       - name: Store coverage as git note
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
