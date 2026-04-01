@@ -546,7 +546,7 @@ mod ts {
     match &schemas[0] {
       Schema::IntoProxy(p) => {
         assert_eq!(p.ident, "MyType");
-        assert_eq!(p.into_ty, "MyDto");
+        assert_eq!(*p.into_ty, Schema::Native("MyDto".into()));
       }
       other => panic!("expected IntoProxy, got: {other:?}"),
     }
@@ -569,7 +569,7 @@ mod ts {
     match &schemas[0] {
       Schema::FromProxy(p) => {
         assert_eq!(p.ident, "MyModel");
-        assert_eq!(p.proxy, "MyProxy");
+        assert_eq!(*p.proxy, Schema::Native("MyProxy".into()));
         assert!(p.is_try);
       }
       other => panic!("expected FromProxy, got: {other:?}"),

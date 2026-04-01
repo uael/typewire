@@ -121,8 +121,7 @@ fn lint(sh: &Shell, fix: bool) -> Result<()> {
   cmd!(sh, "cargo clippy -p typewire-derive --tests {args...}").run_echo()?;
 
   // wasm32: typewire + examples (default features).
-  cmd!(sh, "cargo clippy -p typewire -p todo-app -p chat-app --target {WASM_TARGET} {args...}")
-    .run_echo()?;
+  cmd!(sh, "cargo clippy -p typewire -p todo-app --target {WASM_TARGET} {args...}").run_echo()?;
 
   // wasm32: typewire with all optional type features.
   cmd!(sh, "cargo clippy -p typewire --target {WASM_TARGET} --features {type_features} {args...}")
@@ -162,9 +161,7 @@ fn test_wasm(sh: &Shell) -> Result<()> {
 }
 
 fn test_e2e(sh: &mut Shell) -> Result<()> {
-  test_e2e_example(sh, "todo-app", "todo_app")?;
-  test_e2e_example(sh, "chat-app", "chat_app")?;
-  Ok(())
+  test_e2e_example(sh, "todo-app", "todo_app")
 }
 
 fn test_e2e_example(sh: &mut Shell, example: &str, crate_name: &str) -> Result<()> {

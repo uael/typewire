@@ -394,7 +394,7 @@ fn analyze_into_proxy(
   Ok(Schema::IntoProxy(IntoProxy {
     ident: input.ident.clone(),
     generics: input.generics.clone(),
-    into_ty,
+    into_ty: syn::Type::Path(syn::TypePath { qself: None, path: into_ty }),
     from_body,
   }))
 }
@@ -410,7 +410,7 @@ fn analyze_from_proxy(
   Ok(Schema::FromProxy(FromProxy {
     ident: input.ident.clone(),
     generics: input.generics.clone(),
-    proxy,
+    proxy: syn::Type::Path(syn::TypePath { qself: None, path: proxy }),
     is_try,
     own_shape,
   }))

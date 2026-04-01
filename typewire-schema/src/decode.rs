@@ -36,8 +36,6 @@ pub enum Error {
   InvalidUtf8 { offset: usize },
   #[error("truncated record at offset {offset}: declared {declared} bytes, {remaining} remaining")]
   TruncatedRecord { offset: usize, declared: usize, remaining: usize },
-  #[error("expected named type identifier, got compound type reference")]
-  ExpectedNamedType,
 }
 
 // ---------------------------------------------------------------------------
@@ -281,11 +279,7 @@ fn parse_into_proxy(r: &mut Reader<'_>) -> Result<Schema, Error> {
   let ident = r.read_ident_str()?;
   let _generic_count = r.read_u32_le()?;
   let into_ty = r.read_type_ident()?;
-  Ok(Schema::IntoProxy(crate::IntoProxy {
-    ident,
-    generics: Vec::new(),
-    into_ty: schema_to_ts_type_name(&into_ty),
-  }))
+  Ok(Schema::IntoProxy(crate::IntoProxy { ident, generics: Vec::new(), into_ty: into_ty.into() }))
 }
 
 fn parse_from_proxy(r: &mut Reader<'_>) -> Result<Schema, Error> {
@@ -296,46 +290,9 @@ fn parse_from_proxy(r: &mut Reader<'_>) -> Result<Schema, Error> {
   Ok(Schema::FromProxy(crate::FromProxy {
     ident,
     generics: Vec::new(),
-    proxy: schema_to_ts_type_name(&proxy),
+    proxy: proxy.into(),
     is_try,
   }))
-}
-
-/// Convert a schema type reference to a TypeScript-compatible type name string.
-///
-/// For named types, returns the type name. For primitives and compound types,
-/// returns the TypeScript representation (e.g. "string", "number", "boolean").
-fn schema_to_ts_type_name(schema: &Schema) -> String {
-  match schema {
-    Schema::Native(name) => name.clone(),
-    Schema::Primitive(scalar) => match scalar {
-      Scalar::bool => "boolean".to_string(),
-      Scalar::u8
-      | Scalar::u16
-      | Scalar::u32
-      | Scalar::u64
-      | Scalar::u128
-      | Scalar::i8
-      | Scalar::i16
-      | Scalar::i32
-      | Scalar::i64
-      | Scalar::i128
-      | Scalar::usize
-      | Scalar::isize
-      | Scalar::f32
-      | Scalar::f64 => "number".to_string(),
-      Scalar::char
-      | Scalar::str
-      | Scalar::Url
-      | Scalar::Uuid
-      | Scalar::DateTime
-      | Scalar::FractionalIndex => "string".to_string(),
-      Scalar::Unit => "null".to_string(),
-      Scalar::Bytes => "Uint8ClampedArray".to_string(),
-      Scalar::SerdeJsonValue => "any".to_string(),
-    },
-    _ => schema.ident().unwrap_or("unknown").to_string(),
-  }
 }
 
 fn parse_flat_field(r: &mut Reader<'_>) -> Result<Field, Error> {

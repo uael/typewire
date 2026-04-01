@@ -29,10 +29,10 @@ pub fn generate<'a>(schemas: impl IntoIterator<Item = &'a Schema>) -> String {
       Schema::Transparent(t) => emit_transparent(t, &mut out),
       Schema::Enum(e) => emit_enum(e, &mut out),
       Schema::IntoProxy(p) => {
-        let _ = writeln!(out, "export type {} = {};\n", p.ident, p.into_ty);
+        let _ = writeln!(out, "export type {} = {};\n", p.ident, ty_to_ts(&p.into_ty));
       }
       Schema::FromProxy(p) => {
-        let _ = writeln!(out, "export type {} = {};\n", p.ident, p.proxy);
+        let _ = writeln!(out, "export type {} = {};\n", p.ident, ty_to_ts(&p.proxy));
       }
       _ => {}
     }

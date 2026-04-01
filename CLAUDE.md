@@ -6,10 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```sh
 cargo build                          # Build all crates
-cargo xtask test                     # Run all tests (unit + wasm + e2e)
-cargo xtask test unit                # Native unit + integration + schema roundtrips
-cargo xtask test wasm                # wasm32 tests (needs wasm-bindgen-cli)
-cargo xtask test e2e                 # Build wasm → typegen → tsc → node
+cargo xtask test                     # Run ALL tests (unit + wasm + e2e) — always use this
 cargo xtask fmt                      # Format code (requires nightly rustfmt)
 cargo xtask fmt --check              # Check formatting
 cargo xtask lint                     # Clippy + format check (-D warnings)
@@ -17,6 +14,8 @@ cargo xtask lint --fix               # Auto-fix clippy + formatting
 cargo xtask doc                      # Build documentation (-D warnings in CI)
 cargo deny check                     # License/advisory/ban auditing
 ```
+
+**Always run `cargo xtask test` (no subcommand) to validate changes.** Subcommands (`unit`, `wasm`, `e2e`) exist for targeted debugging only — never run them separately as a substitute for the full suite.
 
 Requires **stable** Rust (pinned in `rust-toolchain`). Formatting uses nightly rustfmt via `cargo +nightly fmt`.
 
@@ -45,8 +44,7 @@ Currently supported targets: **WebAssembly** (wasm32) with TypeScript codegen. *
 | `typewire-derive/` | Proc-macro: `#[derive(Typewire)]` with platform-specific code generation |
 | `typewire-schema/` | Schema metadata: coded binary format, encode/decode, language emitters (TypeScript, more planned) |
 | `xtask/` | Dev automation: fmt, lint (9 clippy passes), test (unit/wasm/e2e) |
-| `examples/todo-app/` | End-to-end example: wasm cdylib with TypeScript type-checking |
-| `examples/chat-app/` | Comprehensive example: all enum tagging modes, newtypes, base64, HashMap, proxy types |
+| `examples/todo-app/` | End-to-end example and user guide: comprehensive showcase of all derive features |
 
 ### Feature Matrix
 

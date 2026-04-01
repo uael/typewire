@@ -148,15 +148,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "chat-app"
-version = "0.0.0"
-dependencies = [
- "js-sys",
- "typewire",
- "wasm-bindgen",
-]
-
-[[package]]
 name = "chrono"
 version = "0.4.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
