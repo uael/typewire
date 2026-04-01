@@ -15,8 +15,6 @@
 !.github/
 !.github/workflows/
 !.github/**/*.yml
-!.github/scripts/
-!.github/**/*.py
 
 # Rust
 !Cargo.toml

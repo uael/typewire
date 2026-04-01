@@ -2,6 +2,13 @@
 
 Dev automation. Single binary with subcommands for formatting, linting, documentation, and testing.
 
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/main.rs` | CLI entry point, fmt/lint/doc/test commands |
+| `src/coverage.rs` | Coverage collection, file-level merging, delta enforcement, git notes |
+
 ## Commands
 
 | Command | What it does |
@@ -14,7 +21,7 @@ Dev automation. Single binary with subcommands for formatting, linting, document
 | `cargo xtask test` | All test suites |
 | `cargo xtask test unit` | Native tests + schema roundtrips (`--features typescript`) |
 | `cargo xtask test wasm` | wasm32 tests via `wasm-bindgen-test` |
-| `cargo xtask test e2e` | Build wasm → typegen (strips section) → snapshot diff → assert stripped → tsc → node |
+| `cargo xtask test e2e` | Build wasm -> typegen (strips section) -> snapshot diff -> assert stripped -> tsc -> node |
 | `cargo xtask test --coverage` | Unit + wasm coverage via `cargo-llvm-cov` (skips e2e) |
 | `cargo xtask test unit --coverage` | Unit tests only with coverage |
 | `cargo xtask test wasm --coverage` | Wasm tests only with coverage (nightly) |
@@ -51,9 +58,13 @@ Uses `wasm-bindgen-test`'s experimental coverage support (requires nightly >= 1.
    - `CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner`
    - `CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Cinstrument-coverage -Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage"`
 
+### Cross-target merging
+
+The `typewire` crate compiles different code for native vs wasm32 (`#[cfg(target_arch = "wasm32")]`). Coverage reports are collected per-target and merged at the file level: files appearing in both reports have their line counts summed (they represent disjoint cfg-gated regions), files in only one report are taken as-is.
+
 ### Reporting
 
-3. `cargo llvm-cov report --json --package <crate>` generates per-crate JSON reports from all accumulated profdata
+`cargo llvm-cov report --json --package <crate>` generates per-crate JSON reports (with per-file details) from all accumulated profdata.
 
 Output:
 - Human-readable summary printed to stdout
