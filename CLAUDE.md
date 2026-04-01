@@ -7,6 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```sh
 cargo build                          # Build all crates
 cargo xtask test                     # Run ALL tests (unit + wasm + e2e) — always use this
+cargo xtask test --coverage          # Unit + wasm coverage (skips e2e)
+cargo xtask test unit --coverage     # Coverage for unit tests only
+cargo xtask test wasm --coverage     # Coverage for wasm tests only (nightly)
 cargo xtask fmt                      # Format code (requires nightly rustfmt)
 cargo xtask fmt --check              # Check formatting
 cargo xtask lint                     # Clippy + format check (-D warnings)

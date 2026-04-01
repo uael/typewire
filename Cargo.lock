@@ -1524,8 +1524,11 @@ name = "xtask"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bitflags",
  "clap",
  "clap-cargo",
+ "serde",
+ "serde_json",
  "xshell",
 ]
 

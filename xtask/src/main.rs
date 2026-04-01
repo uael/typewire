@@ -1,8 +1,22 @@
+mod coverage;
+
 use std::{path::PathBuf, sync::LazyLock};
 
-use anyhow::Result;
+use anyhow::{Result, bail};
+use bitflags::bitflags;
 use clap::{Parser, Subcommand, ValueEnum};
 use xshell::{Shell, cmd};
+
+bitflags! {
+  /// Which test suites to instrument for code coverage.
+  #[derive(Clone, Copy, Debug)]
+  struct CoverageMode: u8 {
+    /// Native unit + integration tests.
+    const UNIT = 0b01;
+    /// wasm32 tests via `wasm-bindgen-test` (nightly).
+    const WASM = 0b10;
+  }
+}
 
 #[derive(Parser)]
 #[command(name = "xtask", about = "Typewire project automation")]
@@ -34,6 +48,18 @@ enum Command {
     /// Which test suite to run (default: all)
     #[arg(value_enum)]
     suite: Option<TestSuite>,
+    /// Collect code coverage via cargo-llvm-cov (unit + wasm)
+    #[arg(long)]
+    coverage: bool,
+    /// Write per-crate coverage JSON to this path
+    #[arg(long, value_name = "PATH")]
+    coverage_output: Option<PathBuf>,
+  },
+  /// Check coverage delta against a parent commit's git note
+  CoverageDelta {
+    /// Path to the current coverage JSON file
+    #[arg(value_name = "COVERAGE_JSON")]
+    coverage_json: PathBuf,
   },
 }
 
@@ -43,7 +69,7 @@ enum TestSuite {
   Unit,
   /// wasm32 tests (requires wasm-bindgen-cli)
   Wasm,
-  /// End-to-end: build wasm → typegen → tsc → node
+  /// End-to-end: build wasm -> typegen -> tsc -> node
   E2e,
 }
 
@@ -68,16 +94,44 @@ fn main() -> Result<()> {
     Command::Fmt { check } => fmt(&sh, check),
     Command::Lint { fix } => lint(&sh, fix),
     Command::Doc => doc(&sh),
-    Command::Test { suite } => match suite {
-      Some(TestSuite::Unit) => test_unit(&sh),
-      Some(TestSuite::Wasm) => test_wasm(&sh),
-      Some(TestSuite::E2e) => test_e2e(&mut sh),
-      None => {
-        test_unit(&sh)?;
-        test_wasm(&sh)?;
+    Command::Test { suite, coverage, coverage_output } => match suite {
+      Some(TestSuite::Unit) => {
+        if coverage {
+          coverage::test_with_coverage(&sh, CoverageMode::UNIT, coverage_output.as_deref())
+        } else {
+          test_unit(&sh)
+        }
+      }
+      Some(TestSuite::Wasm) => {
+        if coverage {
+          coverage::test_with_coverage(&sh, CoverageMode::WASM, coverage_output.as_deref())
+        } else {
+          test_wasm(&sh)
+        }
+      }
+      Some(TestSuite::E2e) => {
+        if coverage {
+          bail!(
+            "--coverage is not supported for e2e tests (LLVM instrument-coverage \
+                 does not target wasm32)"
+          );
+        }
         test_e2e(&mut sh)
       }
+      None => {
+        if coverage {
+          // Combined coverage runs unit + wasm under instrumentation.
+          // E2e is skipped because it doesn't support coverage and is
+          // already validated by the main CI workflow.
+          coverage::test_with_coverage(&sh, CoverageMode::all(), coverage_output.as_deref())
+        } else {
+          test_unit(&sh)?;
+          test_wasm(&sh)?;
+          test_e2e(&mut sh)
+        }
+      }
     },
+    Command::CoverageDelta { coverage_json } => coverage::coverage_delta(&sh, &coverage_json),
   }
 }
 
