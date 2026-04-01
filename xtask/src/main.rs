@@ -1,3 +1,6 @@
+mod bench;
+mod wasm;
+
 use std::{path::PathBuf, sync::LazyLock};
 
 use anyhow::Result;
@@ -34,6 +37,29 @@ enum Command {
     /// Which test suite to run (default: all)
     #[arg(value_enum)]
     suite: Option<TestSuite>,
+  },
+  /// Run benchmarks (size and/or perf)
+  Bench {
+    #[command(subcommand)]
+    cmd: Option<BenchCmd>,
+    /// Output machine-readable JSON
+    #[arg(long, global = true)]
+    json: bool,
+  },
+}
+
+#[derive(Subcommand)]
+enum BenchCmd {
+  /// Bundle size comparison
+  Size,
+  /// Performance benchmarks (wasm, requires Node.js)
+  Perf,
+  /// Check for regressions between two bench JSON files
+  Check {
+    /// Path to current benchmark results JSON
+    current: PathBuf,
+    /// Path to parent benchmark results JSON
+    parent: PathBuf,
   },
 }
 
@@ -77,6 +103,12 @@ fn main() -> Result<()> {
         test_wasm(&sh)?;
         test_e2e(&mut sh)
       }
+    },
+    Command::Bench { cmd, json } => match cmd {
+      Some(BenchCmd::Size) => bench::bench(&sh, &ROOT, bench::BenchKind::SIZE, json),
+      Some(BenchCmd::Perf) => bench::bench(&sh, &ROOT, bench::BenchKind::PERF, json),
+      Some(BenchCmd::Check { current, parent }) => bench::check(&current, &parent),
+      None => bench::bench(&sh, &ROOT, bench::BenchKind::all(), json),
     },
   }
 }
@@ -190,12 +222,15 @@ fn test_e2e(sh: &mut Shell) -> Result<()> {
     "expected section-not-found error, got: {stderr}"
   );
 
-  // Generate JS bindings.
-  cmd!(
+  // Generate JS bindings + optimize wasm.
+  let wasm_path = ROOT.join(format!("target/{WASM_TARGET}/release/todo_app.wasm"));
+  let pkg_dir = ROOT.join("examples/todo-app/pkg");
+  wasm::bindgen(
     sh,
-    "wasm-bindgen target/{WASM_TARGET}/release/todo_app.wasm --out-dir examples/todo-app/pkg --target nodejs"
-  )
-  .run_echo()?;
+    &wasm_path,
+    &pkg_dir,
+    wasm::BindgenFlags::NODEJS | wasm::BindgenFlags::TYPESCRIPT,
+  )?;
 
   // Type-check and run.
   sh.set_current_dir(ROOT.join("examples/todo-app"));

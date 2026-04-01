@@ -1143,16 +1143,18 @@ impl<K: Typewire + Eq + core::hash::Hash, V: Typewire, S: ::std::hash::BuildHash
   #[cfg(target_arch = "wasm32")]
   fn from_js(value: wasm_bindgen::JsValue) -> Result<Self, Error> {
     use wasm_bindgen::JsCast as _;
-    let entries = js_sys::Object::entries(
-      value.dyn_ref::<js_sys::Object>().ok_or(Error::UnexpectedType { expected: "object" })?,
-    );
+    let obj =
+      value.dyn_ref::<js_sys::Object>().ok_or(Error::UnexpectedType { expected: "object" })?;
+    let keys = js_sys::Object::keys(obj);
+    let len = keys.length();
     let mut map = Self::default();
-    map.reserve(entries.length() as usize);
-    for i in 0..entries.length() {
-      let pair: js_sys::Array =
-        entries.get(i).dyn_into().map_err(|_| Error::UnexpectedType { expected: "array" })?;
-      let key = K::from_js(pair.get(0))?;
-      let val = V::from_js(pair.get(1))?;
+    map.reserve(len as usize);
+    for i in 0..len {
+      let k_js = keys.get(i);
+      let v_js = js_sys::Reflect::get(&value, &k_js)
+        .map_err(|_| Error::UnexpectedType { expected: "object" })?;
+      let key = K::from_js(k_js)?;
+      let val = V::from_js(v_js)?;
       map.insert(key, val);
     }
     Ok(map)
@@ -1165,12 +1167,14 @@ impl<K: Typewire + Eq + core::hash::Hash, V: Typewire, S: ::std::hash::BuildHash
       log::warn!("{field}: expected object, skipping");
       return Ok(Self::default());
     };
-    let entries = js_sys::Object::entries(obj);
+    let keys = js_sys::Object::keys(obj);
+    let len = keys.length();
     let mut map = Self::default();
-    map.reserve(entries.length() as usize);
-    for i in 0..entries.length() {
-      let pair: js_sys::Array = entries.get(i).into();
-      match (K::from_js(pair.get(0)), V::from_js(pair.get(1))) {
+    map.reserve(len as usize);
+    for i in 0..len {
+      let k_js = keys.get(i);
+      let v_js = js_sys::Reflect::get(&value, &k_js).unwrap_or(wasm_bindgen::JsValue::UNDEFINED);
+      match (K::from_js(k_js), V::from_js(v_js)) {
         (Ok(k), Ok(v)) => {
           map.insert(k, v);
         }
@@ -1210,15 +1214,17 @@ impl<K: Typewire + Ord, V: Typewire> Typewire for std::collections::BTreeMap<K, 
   #[cfg(target_arch = "wasm32")]
   fn from_js(value: wasm_bindgen::JsValue) -> Result<Self, Error> {
     use wasm_bindgen::JsCast as _;
-    let entries = js_sys::Object::entries(
-      value.dyn_ref::<js_sys::Object>().ok_or(Error::UnexpectedType { expected: "object" })?,
-    );
+    let obj =
+      value.dyn_ref::<js_sys::Object>().ok_or(Error::UnexpectedType { expected: "object" })?;
+    let keys = js_sys::Object::keys(obj);
+    let len = keys.length();
     let mut map = Self::new();
-    for i in 0..entries.length() {
-      let pair: js_sys::Array =
-        entries.get(i).dyn_into().map_err(|_| Error::UnexpectedType { expected: "array" })?;
-      let key = K::from_js(pair.get(0))?;
-      let val = V::from_js(pair.get(1))?;
+    for i in 0..len {
+      let k_js = keys.get(i);
+      let v_js = js_sys::Reflect::get(&value, &k_js)
+        .map_err(|_| Error::UnexpectedType { expected: "object" })?;
+      let key = K::from_js(k_js)?;
+      let val = V::from_js(v_js)?;
       map.insert(key, val);
     }
     Ok(map)
@@ -1231,16 +1237,13 @@ impl<K: Typewire + Ord, V: Typewire> Typewire for std::collections::BTreeMap<K, 
       log::warn!("{field}: expected object, skipping");
       return Ok(Self::default());
     };
-    let entries = js_sys::Object::entries(obj);
+    let keys = js_sys::Object::keys(obj);
+    let len = keys.length();
     let mut map = Self::new();
-    for i in 0..entries.length() {
-      let pair: js_sys::Array = if let Ok(a) = entries.get(i).dyn_into() {
-        a
-      } else {
-        log::warn!("{field}: skipping entry {i}: not an array");
-        continue;
-      };
-      match (K::from_js(pair.get(0)), V::from_js(pair.get(1))) {
+    for i in 0..len {
+      let k_js = keys.get(i);
+      let v_js = js_sys::Reflect::get(&value, &k_js).unwrap_or(wasm_bindgen::JsValue::UNDEFINED);
+      match (K::from_js(k_js), V::from_js(v_js)) {
         (Ok(k), Ok(v)) => {
           map.insert(k, v);
         }
@@ -1498,12 +1501,15 @@ impl Typewire for serde_json::Value {
       }
       Ok(Self::Array(vec))
     } else if let Some(obj) = value.dyn_ref::<js_sys::Object>() {
-      let entries = js_sys::Object::entries(obj);
-      let mut map = serde_json::Map::with_capacity(entries.length() as usize);
-      for i in 0..entries.length() {
-        let pair = js_sys::Array::from(&entries.get(i));
-        let key = pair.get(0).as_string().ok_or(Error::UnexpectedType { expected: "string" })?;
-        let val = Self::from_js(pair.get(1))?;
+      let keys = js_sys::Object::keys(obj);
+      let len = keys.length();
+      let mut map = serde_json::Map::with_capacity(len as usize);
+      for i in 0..len {
+        let k_js = keys.get(i);
+        let key = k_js.as_string().ok_or(Error::UnexpectedType { expected: "string" })?;
+        let v_js = js_sys::Reflect::get(&value, &k_js)
+          .map_err(|_| Error::UnexpectedType { expected: "object" })?;
+        let val = Self::from_js(v_js)?;
         map.insert(key, val);
       }
       Ok(Self::Object(map))
@@ -1666,15 +1672,17 @@ impl<K: Typewire + Eq + core::hash::Hash, V: Typewire> Typewire for indexmap::In
   #[cfg(target_arch = "wasm32")]
   fn from_js(value: wasm_bindgen::JsValue) -> Result<Self, Error> {
     use wasm_bindgen::JsCast as _;
-    let entries = js_sys::Object::entries(
-      value.dyn_ref::<js_sys::Object>().ok_or(Error::UnexpectedType { expected: "object" })?,
-    );
-    let mut map = Self::with_capacity(entries.length() as usize);
-    for i in 0..entries.length() {
-      let pair: js_sys::Array =
-        entries.get(i).dyn_into().map_err(|_| Error::UnexpectedType { expected: "array" })?;
-      let key = K::from_js(pair.get(0))?;
-      let val = V::from_js(pair.get(1))?;
+    let obj =
+      value.dyn_ref::<js_sys::Object>().ok_or(Error::UnexpectedType { expected: "object" })?;
+    let keys = js_sys::Object::keys(obj);
+    let len = keys.length();
+    let mut map = Self::with_capacity(len as usize);
+    for i in 0..len {
+      let k_js = keys.get(i);
+      let v_js = js_sys::Reflect::get(&value, &k_js)
+        .map_err(|_| Error::UnexpectedType { expected: "object" })?;
+      let key = K::from_js(k_js)?;
+      let val = V::from_js(v_js)?;
       map.insert(key, val);
     }
     Ok(map)
@@ -1687,11 +1695,13 @@ impl<K: Typewire + Eq + core::hash::Hash, V: Typewire> Typewire for indexmap::In
       log::warn!("{field}: expected object, skipping");
       return Ok(Self::default());
     };
-    let entries = js_sys::Object::entries(obj);
-    let mut map = Self::with_capacity(entries.length() as usize);
-    for i in 0..entries.length() {
-      let pair: js_sys::Array = entries.get(i).into();
-      match (K::from_js(pair.get(0)), V::from_js(pair.get(1))) {
+    let keys = js_sys::Object::keys(obj);
+    let len = keys.length();
+    let mut map = Self::with_capacity(len as usize);
+    for i in 0..len {
+      let k_js = keys.get(i);
+      let v_js = js_sys::Reflect::get(&value, &k_js).unwrap_or(wasm_bindgen::JsValue::UNDEFINED);
+      match (K::from_js(k_js), V::from_js(v_js)) {
         (Ok(k), Ok(v)) => {
           map.insert(k, v);
         }

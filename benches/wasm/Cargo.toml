@@ -1,0 +1,38 @@
+[package]
+name = "bench-wasm"
+version = "0.0.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+default = []
+# Speed benchmarks: compare typewire, serde-wasm-bindgen, and serde_json.
+perf = [
+  "dep:typewire",
+  "dep:serde",
+  "dep:serde-wasm-bindgen",
+  "dep:serde_json",
+]
+# Size benchmarks: exactly one feature per build to isolate bundle overhead.
+size-baseline = []
+size-serde-wasm-bindgen = ["dep:serde", "dep:serde-wasm-bindgen"]
+size-typewire = ["dep:typewire"]
+size-serde-json = ["dep:serde", "dep:serde_json"]
+
+[dependencies]
+wasm-bindgen.workspace = true
+js-sys.workspace = true
+typewire = { path = "../../typewire", optional = true }
+serde = { workspace = true, optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
+serde_json = { workspace = true, optional = true }
+
+[dev-dependencies]
+wasm-bindgen-test.workspace = true
+
+[lints]
+workspace = true
