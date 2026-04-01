@@ -19,6 +19,7 @@ Dev automation. Single binary with subcommands for formatting, linting, document
 | `cargo xtask test unit --coverage` | Unit tests only with coverage |
 | `cargo xtask test wasm --coverage` | Wasm tests only with coverage (nightly) |
 | `cargo xtask test --coverage --coverage-output path.json` | Write per-crate coverage JSON to a custom path |
+| `cargo xtask coverage-delta target/coverage.json` | Compare coverage against parent commit's git note |
 
 ## Lint Passes
 

@@ -44,12 +44,7 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           # Build the note body from the JSON output.
-          NOTE=$(python3 -c "
-          import json, sys
-          data = json.load(open('target/coverage.json'))
-          for c in data:
-              print(f\"{c['name']}: {c['percent']:.1f}%\")
-          ")
+          NOTE=$(jq -r '.[] | "\(.name): \(.percent | . * 10 | round / 10)%"' target/coverage.json)
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -64,5 +59,4 @@ jobs:
           git push origin refs/notes/coverage
 
       - name: Check coverage delta
-        run: |
-          python3 .github/scripts/coverage-delta.py target/coverage.json
+        run: cargo xtask coverage-delta target/coverage.json

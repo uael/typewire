@@ -41,6 +41,12 @@ enum Command {
     #[arg(long, value_name = "PATH")]
     coverage_output: Option<PathBuf>,
   },
+  /// Check coverage delta against a parent commit's git note
+  CoverageDelta {
+    /// Path to the current coverage JSON file
+    #[arg(value_name = "COVERAGE_JSON")]
+    coverage_json: PathBuf,
+  },
 }
 
 #[derive(Clone, ValueEnum)]
@@ -80,14 +86,14 @@ fn main() -> Result<()> {
     Command::Test { suite, coverage, coverage_output } => match suite {
       Some(TestSuite::Unit) => {
         if coverage {
-          test_unit_with_coverage(&sh, coverage_output.as_deref())
+          test_with_coverage(&sh, true, false, coverage_output.as_deref())
         } else {
           test_unit(&sh)
         }
       }
       Some(TestSuite::Wasm) => {
         if coverage {
-          test_wasm_with_coverage(&sh, coverage_output.as_deref())
+          test_with_coverage(&sh, false, true, coverage_output.as_deref())
         } else {
           test_wasm(&sh)
         }
@@ -106,7 +112,7 @@ fn main() -> Result<()> {
           // Combined coverage runs unit + wasm under instrumentation.
           // E2e is skipped because it doesn't support coverage and is
           // already validated by the main CI workflow.
-          test_all_with_coverage(&sh, coverage_output.as_deref())
+          test_with_coverage(&sh, true, true, coverage_output.as_deref())
         } else {
           test_unit(&sh)?;
           test_wasm(&sh)?;
@@ -114,6 +120,7 @@ fn main() -> Result<()> {
         }
       }
     },
+    Command::CoverageDelta { coverage_json } => coverage_delta(&sh, &coverage_json),
   }
 }
 
@@ -255,72 +262,40 @@ struct CrateCoverage {
   percent: f64,
 }
 
-/// Run unit tests under cargo-llvm-cov and produce per-crate coverage reports.
-///
-/// Coverage uses LLVM instrument-coverage. Only native unit tests are included;
-/// use `test_all_with_coverage` to combine with wasm coverage.
-fn test_unit_with_coverage(sh: &Shell, output_path: Option<&std::path::Path>) -> Result<()> {
-  // Clean previous coverage data to avoid stale profiles.
-  cmd!(sh, "cargo llvm-cov clean --workspace").run_echo()?;
-
-  // Run workspace tests under coverage (no report yet).
-  cmd!(sh, "cargo llvm-cov --no-report --all").run_echo()?;
-
-  // Run typewire-schema typescript feature tests under coverage too
-  // (separate invocation for the mutually exclusive feature).
-  cmd!(sh, "cargo llvm-cov --no-report -p typewire-schema --features typescript").run_echo()?;
-
-  collect_and_report_coverage(sh, output_path)
-}
-
 /// Wasm-specific RUSTFLAGS for coverage instrumentation via `wasm-bindgen-test`.
 ///
 /// Requires nightly >= 1.87.0 and wasm-bindgen-test >= 0.3.57.
 const WASM_COV_RUSTFLAGS: &str = "-Cinstrument-coverage -Zno-profiler-runtime \
   -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage";
 
-/// Run wasm tests under cargo-llvm-cov (nightly only) and produce per-crate
-/// coverage reports.
-fn test_wasm_with_coverage(sh: &Shell, output_path: Option<&std::path::Path>) -> Result<()> {
-  cmd!(sh, "cargo llvm-cov clean --workspace").run_echo()?;
-
-  run_wasm_coverage_pass(sh)?;
-
-  collect_and_report_coverage(sh, output_path)
-}
-
-/// Run all tests (unit + wasm) under cargo-llvm-cov and produce combined
-/// per-crate coverage reports.
-fn test_all_with_coverage(sh: &Shell, output_path: Option<&std::path::Path>) -> Result<()> {
-  cmd!(sh, "cargo llvm-cov clean --workspace").run_echo()?;
-
-  // Native unit tests.
-  cmd!(sh, "cargo llvm-cov --no-report --all").run_echo()?;
-  cmd!(sh, "cargo llvm-cov --no-report -p typewire-schema --features typescript").run_echo()?;
-
-  // Wasm tests (nightly).
-  run_wasm_coverage_pass(sh)?;
-
-  collect_and_report_coverage(sh, output_path)
-}
-
-/// Execute wasm tests under coverage instrumentation.
+/// Run tests under `cargo-llvm-cov` and produce per-crate coverage reports.
 ///
-/// Uses nightly Rust with `wasm-bindgen-test`'s experimental coverage
-/// support. The profraw data is collected into the same llvm-cov workspace
-/// so it can be merged with native coverage.
-fn run_wasm_coverage_pass(sh: &Shell) -> Result<()> {
-  let wasm_rustflags = WASM_COV_RUSTFLAGS;
-  cmd!(sh, "cargo +nightly llvm-cov --no-report -p typewire --target {WASM_TARGET}")
-    .env("CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER", "wasm-bindgen-test-runner")
-    .env("CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS", wasm_rustflags)
-    .run_echo()?;
-  Ok(())
-}
+/// When `unit` is set, native workspace tests and the `typewire-schema`
+/// typescript-feature tests are included. When `wasm` is set, wasm32 tests
+/// are run under nightly with `wasm-bindgen-test`'s experimental coverage.
+fn test_with_coverage(
+  sh: &Shell,
+  unit: bool,
+  wasm: bool,
+  output_path: Option<&std::path::Path>,
+) -> Result<()> {
+  cmd!(sh, "cargo llvm-cov clean --workspace").run_echo()?;
 
-/// Collect per-crate JSON coverage from accumulated profdata and print a
-/// human-readable summary.
-fn collect_and_report_coverage(sh: &Shell, output_path: Option<&std::path::Path>) -> Result<()> {
+  if unit {
+    cmd!(sh, "cargo llvm-cov --no-report --all").run_echo()?;
+    // typewire-schema typescript feature tests (mutually exclusive with encode).
+    cmd!(sh, "cargo llvm-cov --no-report -p typewire-schema --features typescript").run_echo()?;
+  }
+
+  if wasm {
+    let wasm_rustflags = WASM_COV_RUSTFLAGS;
+    cmd!(sh, "cargo +nightly llvm-cov --no-report -p typewire --target {WASM_TARGET}")
+      .env("CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER", "wasm-bindgen-test-runner")
+      .env("CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS", wasm_rustflags)
+      .run_echo()?;
+  }
+
+  // Collect per-crate coverage from all accumulated profdata.
   let mut results = Vec::new();
   for &krate in COVERAGE_CRATES {
     let json_str =
@@ -361,4 +336,100 @@ fn parse_llvm_cov_json(json_str: &str, crate_name: &str) -> Result<CrateCoverage
   let percent = totals["percent"].as_f64().unwrap_or(0.0);
 
   Ok(CrateCoverage { name: crate_name.to_string(), covered, total, percent })
+}
+
+// ---------------------------------------------------------------------------
+// Coverage delta
+// ---------------------------------------------------------------------------
+
+/// Maximum allowed coverage regression (in percentage points).
+const MAX_REGRESSION: f64 = 1.0;
+
+/// Compare current coverage against the parent commit's git note.
+///
+/// Exits with an error if any crate's line coverage drops by more than
+/// `MAX_REGRESSION` percentage points.
+fn coverage_delta(sh: &Shell, coverage_json: &std::path::Path) -> Result<()> {
+  let contents = std::fs::read_to_string(coverage_json)?;
+  let current: Vec<CrateCoverage> = serde_json::from_str(&contents)?;
+  let current_map: std::collections::BTreeMap<&str, f64> =
+    current.iter().map(|c| (c.name.as_str(), c.percent)).collect();
+
+  let Some(parent) = get_parent_coverage(sh) else {
+    println!("No parent coverage note found -- skipping delta check.");
+    return Ok(());
+  };
+
+  println!();
+  println!("{:<25} {:>8} {:>8} {:>8}  Status", "Crate", "Old", "New", "Delta");
+  println!("{}", "-".repeat(62));
+
+  let mut failed = false;
+  for name in current_map.keys().copied() {
+    let new_pct = current_map[name];
+    let Some(&old_pct) = parent.get(name) else {
+      println!("{name:<25} {:>8} {new_pct:>7.1}% {:>8}  new", "N/A", "");
+      continue;
+    };
+    let delta = new_pct - old_pct;
+    let status = if old_pct - new_pct > MAX_REGRESSION {
+      failed = true;
+      "FAIL (>1% regression)"
+    } else if delta < 0.0 {
+      "warn"
+    } else {
+      "ok"
+    };
+    println!("{name:<25} {old_pct:>7.1}% {new_pct:>7.1}% {delta:>+7.1}%  {status}");
+  }
+
+  println!();
+
+  if failed {
+    bail!("Coverage regression exceeds {MAX_REGRESSION:.1} percentage point threshold.");
+  }
+  println!("Coverage delta check passed.");
+  Ok(())
+}
+
+/// Read coverage percentages from the parent commit's git note.
+///
+/// Determines the comparison base using `git merge-base` (for PRs) or
+/// `HEAD~1` (for pushes to main). Returns `None` when no note exists
+/// (first run).
+fn get_parent_coverage(sh: &Shell) -> Option<std::collections::HashMap<String, f64>> {
+  // Determine the comparison base.
+  let base_sha = cmd!(sh, "git merge-base HEAD origin/main")
+    .ignore_status()
+    .read()
+    .ok()
+    .filter(|s| !s.is_empty())
+    .or_else(|| {
+      cmd!(sh, "git rev-parse HEAD~1").ignore_status().read().ok().filter(|s| !s.is_empty())
+    })?;
+
+  // Fetch notes ref (may not exist yet).
+  let _ =
+    cmd!(sh, "git fetch origin refs/notes/coverage:refs/notes/coverage").ignore_status().output();
+
+  // Read the note attached to the base commit.
+  let note = cmd!(sh, "git notes --ref=coverage show {base_sha}")
+    .ignore_status()
+    .read()
+    .ok()
+    .filter(|s| !s.is_empty())?;
+
+  let mut result = std::collections::HashMap::new();
+  for line in note.lines() {
+    let line = line.trim();
+    if line.is_empty() {
+      continue;
+    }
+    // Format: "crate-name: 85.2%"
+    let (name, pct) = line.split_once(':')?;
+    let pct = pct.trim().strip_suffix('%')?.trim();
+    result.insert(name.trim().to_string(), pct.parse::<f64>().ok()?);
+  }
+
+  if result.is_empty() { None } else { Some(result) }
 }
