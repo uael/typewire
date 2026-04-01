@@ -24,6 +24,9 @@ import type {
   get_todo_title as GetTodoTitleFn,
   count_completed as CountCompletedFn,
   filter_by_priority as FilterByPriorityFn,
+  init as InitFn,
+  dispatch as DispatchFn,
+  view as ViewFn,
 } from "./pkg/todo_app.d.ts";
 
 // wasm-bindgen --target nodejs emits CommonJS
@@ -39,6 +42,9 @@ const {
   get_todo_title,
   count_completed,
   filter_by_priority,
+  init,
+  dispatch,
+  view,
 } = require("./pkg/todo_app.js") as {
   create_todo: typeof CreateTodoFn;
   apply_command: typeof ApplyCommandFn;
@@ -50,6 +56,9 @@ const {
   get_todo_title: typeof GetTodoTitleFn;
   count_completed: typeof CountCompletedFn;
   filter_by_priority: typeof FilterByPriorityFn;
+  init: typeof InitFn;
+  dispatch: typeof DispatchFn;
+  view: typeof ViewFn;
 };
 
 // ---------------------------------------------------------------------------
@@ -353,7 +362,55 @@ assert.equal(lowOnly.todos.length, 1);
 assert.equal(lowOnly.todos[0].title, "Beta");
 
 // ---------------------------------------------------------------------------
-// 10. Error handling — invalid inputs should throw
+// 10. Stateful API — dispatch + view with patch_js
+// ---------------------------------------------------------------------------
+
+init("Stateful");
+
+// Materialize the initial view.
+// We use `any` since `view()` mutates the object in-place and TS cannot
+// track property additions from the wasm side.
+const vm: Record<string, any> = {};
+view(vm);
+assert.equal((vm as any).name, "Stateful");
+assert.deepEqual((vm as any).todos, []);
+
+// Dispatch an Add command — view should reflect the new todo
+dispatch({
+  type: "Add",
+  data: {
+    id: 100,
+    title: "Stateful todo",
+    completed: false,
+    description: null,
+    priority: "medium",
+    tags: ["state"],
+    createdAt: timestamp,
+    metadata: {},
+    extra: {},
+  },
+});
+view(vm);
+assert.equal((vm as any).todos.length, 1);
+assert.equal((vm as any).todos[0].title, "Stateful todo");
+assert.equal((vm as any).todos[0].completed, false);
+
+// Keep reference to the todos array to verify patch_js preserves identity
+const todosRef = (vm as any).todos;
+
+// Toggle the todo — patch_js should update in-place
+dispatch({ type: "Toggle", data: { id: 100 } });
+view(vm);
+assert.equal((vm as any).todos[0].completed, true);
+assert.equal((vm as any).todos, todosRef, "patch_js should preserve array identity");
+
+// Remove the todo
+dispatch({ type: "Remove", data: { id: 100 } });
+view(vm);
+assert.equal((vm as any).todos.length, 0);
+
+// ---------------------------------------------------------------------------
+// 11. Error handling — invalid inputs should throw
 // ---------------------------------------------------------------------------
 
 // Missing required field (title)

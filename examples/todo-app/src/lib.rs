@@ -1,6 +1,6 @@
 #![cfg(target_arch = "wasm32")]
 
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap};
 
 use typewire::Typewire;
 use wasm_bindgen::prelude::*;
@@ -403,4 +403,79 @@ pub fn filter_by_priority(
     name: list.name,
     todos: list.todos.into_iter().filter(|t| t.priority == priority).collect(),
   })
+}
+
+// ===========================================================================
+// Stateful API — local state + patch_js-based view updates
+// ===========================================================================
+
+thread_local! {
+  static STATE: RefCell<TodoList> = const { RefCell::new(TodoList {
+    name: String::new(),
+    todos: Vec::new(),
+  }) };
+}
+
+/// Initialize the local state with a name.
+#[wasm_bindgen]
+pub fn init(name: &str) {
+  STATE.with(|s| {
+    let mut state = s.borrow_mut();
+    state.name = name.to_string();
+    state.todos.clear();
+  });
+}
+
+/// Dispatch a command to mutate the local state.
+///
+/// # Errors
+///
+/// Returns an error if the command is not valid.
+#[wasm_bindgen]
+pub fn dispatch(
+  #[wasm_bindgen(unchecked_param_type = "Command")] cmd: Command,
+) -> Result<(), typewire::Error> {
+  STATE.with(|s| {
+    let mut state = s.borrow_mut();
+    match cmd {
+      Command::Add(todo) => state.todos.push(todo),
+      Command::Toggle { id } => {
+        if let Some(t) = state.todos.iter_mut().find(|t| t.id == id) {
+          t.completed = !t.completed;
+        }
+      }
+      Command::Remove { id } => state.todos.retain(|t| t.id != id),
+      Command::SetPriority { id, priority } => {
+        if let Some(t) = state.todos.iter_mut().find(|t| t.id == id) {
+          t.priority = priority;
+        }
+      }
+      Command::SendMessage { .. } => {}
+    }
+  });
+  Ok(())
+}
+
+/// Patch a JS view object in place to reflect the current state.
+///
+/// Uses `patch_js` for structural diffing — only the properties that
+/// actually changed are touched.  In a reactive UI (e.g. `MobX`), this
+/// triggers fine-grained re-renders.
+#[wasm_bindgen]
+pub fn view(view: &JsValue) {
+  STATE.with(|s| {
+    let state = s.borrow();
+    state.patch_js(view, |fresh| {
+      // Full replace fallback: copy all properties from fresh to view.
+      // In practice this only fires on the very first call (when view
+      // is an empty object).
+      let src = js_sys::Object::from(fresh);
+      let dst = js_sys::Object::from(view.clone());
+      let entries = js_sys::Object::entries(&src);
+      for i in 0..entries.length() {
+        let pair = js_sys::Array::from(&entries.get(i));
+        js_sys::Reflect::set(&dst, &pair.get(0), &pair.get(1)).ok();
+      }
+    });
+  });
 }
