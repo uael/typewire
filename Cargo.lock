@@ -1007,7 +1007,7 @@ checksum = "9ea3136b675547379c4bd395ca6b938e5ad3c3d20fad76e7fe85f9e0d011419c"
 
 [[package]]
 name = "typewire"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "base64",
  "bytes",
@@ -1035,7 +1035,7 @@ dependencies = [
 
 [[package]]
 name = "typewire-derive"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1045,7 +1045,7 @@ dependencies = [
 
 [[package]]
 name = "typewire-schema"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "bitflags",
  "proc-macro2",

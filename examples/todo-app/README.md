@@ -1,37 +1,36 @@
 # todo-app
 
 End-to-end example and practical guide for the typewire pipeline:
-**derive -> compile -> TypeScript bindings -> JS runtime test**.
+**derive → compile → typegen → type-check → runtime test**.
 
 This example showcases the full typewire API surface -- transparent newtypes,
 all enum tagging modes, `HashMap`, `base64` encoding, proxy types with
 validation, tuple structs, untagged enums, `rename_all`, `skip_serializing_if`,
 `default`, and more.
 
-## Build & test
+## Quick start
 
 ```sh
-# Run the full e2e pipeline (recommended)
 cargo xtask test e2e
+```
 
-# Or manually:
+## Manual steps
+
+```sh
 # 1. Build the wasm module
 cargo build -p todo-app --target wasm32-unknown-unknown --release
 
-# 2. Generate TypeScript declarations
+# 2. Generate TypeScript type declarations
 cargo run -p typewire --features cli -- \
   target/wasm32-unknown-unknown/release/todo_app.wasm \
   -o examples/todo-app/types.d.ts
 
-# 3. Generate JS bindings
+# 3. Generate JS/TS bindings
 wasm-bindgen target/wasm32-unknown-unknown/release/todo_app.wasm \
   --out-dir examples/todo-app/pkg --target nodejs
 
-# 4. Type-check and run tests
-cd examples/todo-app
-npm install
-npx tsc --noEmit
-npx tsx test.ts
+# 4. Install deps, type-check, and run the test
+cd examples/todo-app && npm install && npx tsc --noEmit && npx tsx test.ts
 ```
 
 ## Table of contents

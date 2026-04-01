@@ -157,7 +157,10 @@ impl<'a> Reader<'a> {
 
 /// Parse a `typewire_schemas` section into a list of [`Schema`] definitions.
 ///
-/// Each record is a length-prefixed [`coded::Record<T>`](crate::coded::Record).
+/// The section contains length-prefixed
+/// [`coded::Record<T>`](crate::coded::Record) entries. Version
+/// validation is handled separately (the CLI checks the
+/// `typewire_version` section before calling this function).
 ///
 /// # Errors
 ///

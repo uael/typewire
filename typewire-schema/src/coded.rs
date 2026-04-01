@@ -5,7 +5,10 @@
 //!
 //! # Binary format
 //!
-//! The `typewire_schemas` section is a sequence of self-delimiting records:
+//! The `typewire_version` section contains a single byte —
+//! [`SCHEMA_VERSION`] — written once by the `typewire` crate. The
+//! `typewire_schemas` section contains a sequence of self-delimiting
+//! records:
 //!
 //! ```text
 //! [u32le len][Tag byte][record-specific payload...]
@@ -13,11 +16,15 @@
 //! ...
 //! ```
 //!
-//! Each record starts with a `Tag` byte identifying its kind (Struct,
-//! Enum, Transparent, etc.). String identifiers use `Ident<N>` —
-//! a u32le length prefix followed by UTF-8 bytes. Type references use
-//! compound ident wrappers (`OptionIdent`, `SeqIdent`, `MapIdent`,
-//! etc.) that compose inner idents recursively.
+//! The CLI validates the version section before parsing records.
+//!
+//! Each record's `len` field counts all bytes after itself (the `Tag`
+//! byte plus the payload). Each record starts with a `Tag` byte
+//! identifying its kind (Struct, Enum, Transparent, etc.). String
+//! identifiers use `Ident<N>` — a u32le length prefix followed by
+//! UTF-8 bytes. Type references use compound ident wrappers
+//! (`OptionIdent`, `SeqIdent`, `MapIdent`, etc.) that compose inner
+//! idents recursively.
 //!
 //! The extractor (see the `decode` module) reads these records back
 //! into [`Schema`](crate::Schema) values.
@@ -31,10 +38,28 @@
 
 use crate::{EnumFlags, FieldFlags, Scalar, StructFlags, VariantFlags};
 
+/// Marker trait for types that can serve as a `Typewire::Ident`.
+///
+/// Seals the `Typewire::Ident` associated type so only the ident types
+/// defined in this module satisfy the bound.
+pub trait SchemaId: Copy + 'static {}
+
 /// The link-section name used to embed schema records in compiled binaries.
 ///
 /// On Apple platforms, the full section specifier is `__DATA,typewire_schemas`.
 pub const SECTION_NAME: &str = "typewire_schemas";
+
+/// The link-section name for the one-byte schema version header.
+///
+/// This section is written once by the `typewire` crate (when the
+/// `schemas` feature is enabled). The CLI reads it before parsing the
+/// records in [`SECTION_NAME`].
+pub const VERSION_SECTION_NAME: &str = "typewire_version";
+
+/// Schema format version. Incremented whenever the binary layout of
+/// `Record<T>` changes. The decoder rejects records whose version byte
+/// does not match this constant.
+pub const SCHEMA_VERSION: u8 = 1;
 
 // -- Little-endian u32 --------------------------------------------------
 
@@ -63,12 +88,34 @@ const fn const_usize_to_u32(n: usize) -> u32 {
   u32::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])
 }
 
+// -- Section header ----------------------------------------------------
+
+/// One-byte section header written once at the start of the
+/// `typewire_schemas` section.
+///
+/// The `typewire` crate emits this as a `#[link_section]` static when
+/// the `schemas` feature is enabled, ensuring every compiled binary
+/// begins with a version byte that the decoder validates before parsing
+/// any records.
+#[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
+#[repr(C, packed)]
+pub struct SectionHeader {
+  pub version: u8,
+}
+
+impl SectionHeader {
+  /// Header for the current schema version.
+  pub const CURRENT: Self = Self { version: SCHEMA_VERSION };
+}
+
 // -- Self-delimiting record wrapper ------------------------------------
 
 /// Wraps a flat record `T` with a u32le length prefix, making it
 /// self-delimiting when linkers concatenate same-named sections.
 ///
-/// Layout: `[4-byte LE len][len bytes of T]`.
+/// Layout: `[4-byte LE len][bytes of T]`.
+///
+/// The `len` field counts all bytes after itself (the payload).
 #[derive(Clone, Copy, zerocopy::IntoBytes, zerocopy::Immutable)]
 #[repr(C, packed)]
 pub struct Record<T: Copy> {
@@ -98,6 +145,8 @@ pub struct Ident<const N: usize> {
   pub data: [u8; N],
 }
 
+impl<const N: usize> SchemaId for Ident<N> {}
+
 impl<const N: usize> Ident<N> {
   /// # Panics
   ///
@@ -124,6 +173,8 @@ pub struct OptionIdent<Inner: Copy> {
   pub inner: Inner,
 }
 
+impl<Inner: SchemaId> SchemaId for OptionIdent<Inner> {}
+
 impl<Inner: Copy> OptionIdent<Inner> {
   pub const fn new(inner: Inner) -> Self {
     Self { tag: Tag::Option, inner }
@@ -138,6 +189,8 @@ pub struct SeqIdent<Inner: Copy> {
   pub tag: Tag,
   pub element: Inner,
 }
+
+impl<Inner: SchemaId> SchemaId for SeqIdent<Inner> {}
 
 impl<Inner: Copy> SeqIdent<Inner> {
   pub const fn new(element: Inner) -> Self {
@@ -155,6 +208,8 @@ pub struct MapIdent<K: Copy, V: Copy> {
   pub value: V,
 }
 
+impl<K: SchemaId, V: SchemaId> SchemaId for MapIdent<K, V> {}
+
 impl<K: Copy, V: Copy> MapIdent<K, V> {
   pub const fn new(key: K, value: V) -> Self {
     Self { tag: Tag::Map, key, value }
@@ -171,6 +226,8 @@ pub struct TupleIdent<Elements: Copy> {
   pub elements: Elements,
 }
 
+impl<Elements: Copy + 'static> SchemaId for TupleIdent<Elements> {}
+
 impl<Elements: Copy> TupleIdent<Elements> {
   pub const fn new(count: u8, elements: Elements) -> Self {
     Self { tag: Tag::Struct, count, elements }
@@ -185,6 +242,8 @@ pub struct PrimitiveIdent {
   pub tag: Tag,
   pub scalar: Scalar,
 }
+
+impl SchemaId for PrimitiveIdent {}
 
 impl PrimitiveIdent {
   #[must_use]
