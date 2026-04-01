@@ -308,11 +308,26 @@ fn test_with_coverage(
   }
 
   // Collect per-crate coverage from all accumulated profdata.
+  //
+  // The `typewire` crate compiles different code for native vs wasm32
+  // (most impls are behind `#[cfg(target_arch = "wasm32")]`), so we
+  // must collect reports for both targets and merge the line counts.
   let mut results = Vec::new();
   for &krate in COVERAGE_CRATES {
-    let json_str =
+    let native =
       cmd!(sh, "cargo llvm-cov report --json --package {krate} --summary-only").read()?;
-    let summary = parse_llvm_cov_json(&json_str, krate)?;
+    let mut summary = parse_llvm_cov_json(&native, krate)?;
+
+    if mode.contains(CoverageMode::WASM) && krate == "typewire" {
+      let wasm = cmd!(
+        sh,
+        "cargo llvm-cov report --json --package {krate} --target {WASM_TARGET} --summary-only"
+      )
+      .read()?;
+      let wasm_summary = parse_llvm_cov_json(&wasm, krate)?;
+      summary = merge_coverage(summary, wasm_summary);
+    }
+
     results.push(summary);
   }
 
@@ -348,6 +363,18 @@ fn parse_llvm_cov_json(json_str: &str, crate_name: &str) -> Result<CrateCoverage
   let percent = totals["percent"].as_f64().unwrap_or(0.0);
 
   Ok(CrateCoverage { name: crate_name.to_string(), covered, total, percent })
+}
+
+/// Merge coverage from two targets (native + wasm) for the same crate.
+///
+/// The same source file may be compiled under both targets with different
+/// `#[cfg]` gates, producing disjoint sets of coverable lines. We sum the
+/// line counts and recompute the percentage.
+fn merge_coverage(a: CrateCoverage, b: CrateCoverage) -> CrateCoverage {
+  let covered = a.covered + b.covered;
+  let total = a.total + b.total;
+  let percent = if total > 0 { covered as f64 / total as f64 * 100.0 } else { 0.0 };
+  CrateCoverage { name: a.name, covered, total, percent }
 }
 
 // ---------------------------------------------------------------------------
