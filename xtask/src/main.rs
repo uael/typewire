@@ -124,8 +124,7 @@ fn main() -> Result<()> {
           // Combined coverage runs unit + wasm under instrumentation.
           // E2e is skipped because it doesn't support coverage and is
           // already validated by the main CI workflow.
-          let mode = CoverageMode::UNIT | CoverageMode::WASM;
-          test_with_coverage(&sh, mode, coverage_output.as_deref())
+          test_with_coverage(&sh, CoverageMode::all(), coverage_output.as_deref())
         } else {
           test_unit(&sh)?;
           test_wasm(&sh)?;
