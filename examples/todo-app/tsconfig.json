@@ -5,8 +5,11 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "target": "es2022",
+    "lib": ["es2022", "dom", "dom.iterable", "esnext"],
     "allowImportingTsExtensions": true,
-    "types": ["node"]
+    "jsx": "react-jsx",
+    "types": ["node"],
+    "skipLibCheck": true
   },
-  "include": ["test.ts", "types.d.ts", "pkg/*.d.ts"]
+  "include": ["test.ts", "types.d.ts", "pkg/*.d.ts", "web/**/*.ts", "web/**/*.tsx"]
 }

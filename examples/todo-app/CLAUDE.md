@@ -22,6 +22,11 @@ End-to-end example and practical guide demonstrating the full typewire pipeline.
 | `tsconfig.json` | TypeScript config for strict type-checking |
 | `package.json` | Dev deps: `typescript`, `tsx`, `@types/node` |
 | `README.md` | User-facing guide: quick start, getting started, links to docs |
+| `web/index.html` | HTML shell for the React/MobX UI |
+| `web/main.tsx` | React entry point with MobX configuration |
+| `web/App.tsx` | React components: `App` and `TodoItem` (observer) |
+| `web/store.ts` | MobX store backed by wasm state + `patch_js` |
+| `web/vite.config.ts` | Vite config for the web UI |
 
 ## Running
 
@@ -65,3 +70,5 @@ cd examples/todo-app && npm install && npx tsc --noEmit && npx tsx test.ts
 - Error handling across wasm boundary (`Result<T, typewire::Error>`)
 - Direct return (non-Result) wasm exports (`describe_command`, `get_todo_title`, `count_completed`)
 - Richer API: `get_todo_title`, `count_completed`, `filter_by_priority`
+- Stateful dispatch/view pattern: `init`, `dispatch`, `view` with `patch_js`
+- React/MobX web UI in `web/` directory (run with `npm run dev`)

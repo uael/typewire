@@ -50,6 +50,10 @@ examples/*/*.gen.d.ts
 !examples/*/package.json
 !examples/*/src/
 !examples/**/*.rs
+!examples/*/web/
+!examples/*/web/*.ts
+!examples/*/web/*.tsx
+!examples/*/web/*.html
 
 # Rust (xtask)
 !xtask/
