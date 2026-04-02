@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4](https://github.com/uael/typewire/compare/v0.0.3...v0.0.4) - 2026-04-02
+
+### Added
+
+- add wasm benchmark infrastructure with CI regression detection ([#13](https://github.com/uael/typewire/pull/13))
+- [**breaking**] add schema format versioning ([#12](https://github.com/uael/typewire/pull/12))
+- add SchemaId marker trait to seal Typewire::Ident ([#10](https://github.com/uael/typewire/pull/10))
+
 ## [0.0.3](https://github.com/uael/typewire/compare/v0.0.2...v0.0.3) - 2026-03-31
 
 ### Added
