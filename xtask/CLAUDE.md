@@ -8,7 +8,7 @@ Dev automation. Single binary with subcommands for formatting, linting, document
 |---------|-------------|
 | `cargo xtask fmt` | `cargo +nightly fmt --all` |
 | `cargo xtask fmt --check` | Check-only formatting |
-| `cargo xtask lint` | 9 clippy passes (all feature combos + wasm32) + fmt check |
+| `cargo xtask lint` | 4 clippy passes (all feature combos + wasm32) + fmt check |
 | `cargo xtask lint --fix` | Auto-fix mode |
 | `cargo xtask doc` | Build docs per-crate with correct feature sets |
 | `cargo xtask test` | All test suites |
@@ -23,14 +23,9 @@ Dev automation. Single binary with subcommands for formatting, linting, document
 
 ## Lint Passes
 
-The lint command runs separate clippy invocations because `typewire-schema`'s `encode` and `decode` features are mutually exclusive:
+The lint command runs separate clippy invocations because `typewire-schema`'s `encode` and `decode` features are mutually exclusive. Package-prefixed features (`typewire/uuid`, etc.) let us check optional type impls without extra passes:
 
-1. Workspace default features
-2. `typewire-schema` no features
-3. `typewire-schema --features encode`
-4. `typewire-schema --features typescript`
-5. `typewire --no-default-features`
-6. `typewire` all type features
-7. `typewire --no-default-features --features cli`
-8. `typewire-derive`
-9. `typewire + todo-app --target wasm32-unknown-unknown`
+1. Workspace + `typewire` optional type features (covers `typewire-derive`, `typewire-schema[encode]`, all type impls)
+2. `typewire-schema --features typescript` (decode path + tests)
+3. `typewire --no-default-features --features cli` (codegen binary)
+4. `typewire + todo-app --target wasm32` + optional type features

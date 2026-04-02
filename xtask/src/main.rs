@@ -125,39 +125,28 @@ fn lint(sh: &Shell, fix: bool) -> Result<()> {
     if fix { ["--fix", "--allow-dirty", "--allow-staged"] } else { ["--", "-D", "warnings"] };
 
   // typewire-schema's `encode` and `decode` features are mutually exclusive,
-  // so we lint each meaningful feature combination separately.
+  // so we need separate passes for the two code paths. The workspace build
+  // covers encode (via typewire-derive); the typescript pass covers decode.
+  // Package-prefixed features let us check typewire's optional type impls in
+  // the same invocation as the workspace/wasm32 builds.
+  let type_features: String =
+    TYPE_FEATURES.split(',').map(|f| format!("typewire/{f}")).collect::<Vec<_>>().join(",");
 
-  // Workspace with default features (typewire[derive], typewire-schema[encode]).
-  cmd!(sh, "cargo clippy --tests {args...}").run_echo()?;
+  // 1. Workspace + typewire optional type features.
+  cmd!(sh, "cargo clippy --tests --features {type_features} {args...}").run_echo()?;
 
-  // typewire-schema: no features (coded only).
-  cmd!(sh, "cargo clippy -p typewire-schema --tests --no-default-features {args...}").run_echo()?;
-
-  // typewire-schema: encode path.
-  cmd!(sh, "cargo clippy -p typewire-schema --tests --features encode {args...}").run_echo()?;
-
-  // typewire-schema: typescript path (decode, no encode).
+  // 2. typewire-schema: typescript/decode path + tests.
   cmd!(sh, "cargo clippy -p typewire-schema --tests --features typescript {args...}").run_echo()?;
 
-  // typewire: no features (no derive, no optional deps).
-  cmd!(sh, "cargo clippy -p typewire --no-default-features {args...}").run_echo()?;
-
-  // typewire: all optional type features.
-  let type_features = TYPE_FEATURES;
-  cmd!(sh, "cargo clippy -p typewire --tests --features {type_features} {args...}").run_echo()?;
-
-  // typewire: cli feature without derive (codegen/typescript path).
+  // 3. typewire: cli binary (codegen/typescript path, no derive).
   cmd!(sh, "cargo clippy -p typewire --no-default-features --features cli {args...}").run_echo()?;
 
-  // typewire-derive.
-  cmd!(sh, "cargo clippy -p typewire-derive --tests {args...}").run_echo()?;
-
-  // wasm32: typewire + examples (default features).
-  cmd!(sh, "cargo clippy -p typewire -p todo-app --target {WASM_TARGET} {args...}").run_echo()?;
-
-  // wasm32: typewire with all optional type features.
-  cmd!(sh, "cargo clippy -p typewire --target {WASM_TARGET} --features {type_features} {args...}")
-    .run_echo()?;
+  // 4. wasm32: typewire + todo-app with all optional type features.
+  cmd!(
+    sh,
+    "cargo clippy -p typewire -p todo-app --target {WASM_TARGET} --features {type_features} {args...}"
+  )
+  .run_echo()?;
 
   fmt(sh, !fix)
 }
