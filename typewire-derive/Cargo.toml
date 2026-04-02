@@ -1,6 +1,6 @@
 [package]
 name = "typewire-derive"
-version = "0.0.3"
+version = "0.0.4"
 edition.workspace = true
 rust-version.workspace = true
 license = "Apache-2.0 OR MIT"
@@ -17,7 +17,7 @@ schemas = []
 proc-macro = true
 
 [dependencies]
-typewire-schema = { version = "=0.0.3", path = "../typewire-schema", features = ["encode"] }
+typewire-schema = { version = "=0.0.4", path = "../typewire-schema", features = ["encode"] }
 proc-macro2.workspace = true
 quote.workspace = true
 syn.workspace = true

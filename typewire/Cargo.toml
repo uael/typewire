@@ -1,6 +1,6 @@
 [package]
 name = "typewire"
-version = "0.0.3"
+version = "0.0.4"
 edition.workspace = true
 rust-version.workspace = true
 license = "Apache-2.0 OR MIT"
@@ -32,8 +32,8 @@ required-features = ["cli"]
 
 
 [dependencies]
-typewire-derive = { version = "=0.0.3", path = "../typewire-derive", optional = true }
-typewire-schema = { version = "=0.0.3", path = "../typewire-schema" }
+typewire-derive = { version = "=0.0.4", path = "../typewire-derive", optional = true }
+typewire-schema = { version = "=0.0.4", path = "../typewire-schema" }
 clap = { workspace = true, optional = true }
 object = { version = "0.39", features = ["read", "wasm"], optional = true }
 walrus = { version = "0.26", optional = true }
